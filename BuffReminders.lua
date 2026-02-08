@@ -616,6 +616,9 @@ local function HideFrame(frame)
     if frame.actionMainButton then
         frame.actionMainButton:Hide()
     end
+    if frame.actionHolder then
+        frame.actionHolder:Hide()
+    end
 end
 
 ---Show a frame with missing text styling
@@ -695,6 +698,35 @@ end
 -- CONSUMABLE ACTION BUTTONS
 -- ============================================================================
 
+local ACTION_ICON_SCALE = 0.45
+local ACTION_ICON_MIN = 18
+local ACTION_ICON_Y_OFFSET = -6
+
+local function CreateActionButton(parent)
+    local btn = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+    btn:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "LeftButtonDown" or "LeftButtonUp")
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    btn.icon:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
+
+    btn.count = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    btn.count:SetPoint("BOTTOMRIGHT", -1, 1)
+
+    btn:SetScript("OnEnter", function(self)
+        if self.itemID then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetItemByID(self.itemID)
+            GameTooltip:Show()
+        end
+    end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    return btn
+end
+
 local function EnsureMainActionButton(frame)
     if frame.actionMainButton then
         return frame.actionMainButton
@@ -720,10 +752,77 @@ local function EnsureMainActionButton(frame)
     return btn
 end
 
+local function UpdateConsumableButtons(frame, actionItems)
+    if not actionItems or #actionItems == 0 then
+        if frame.actionHolder then
+            frame.actionHolder:Hide()
+        end
+        return
+    end
+
+    if not frame.actionHolder then
+        frame.actionHolder = CreateFrame("Frame", nil, frame)
+        frame.actionHolder:SetFrameLevel(frame:GetFrameLevel() + 4)
+        frame.actionButtons = {}
+    end
+
+    local effectiveCat = GetEffectiveCategory(frame)
+    local catSettings = GetCategorySettings(effectiveCat)
+    local size = math.max(ACTION_ICON_MIN, math.floor((catSettings.iconSize or 64) * ACTION_ICON_SCALE))
+    local spacing = math.max(2, math.floor(size * 0.2))
+    local totalWidth = #actionItems * size + (#actionItems - 1) * spacing
+
+    frame.actionHolder:SetSize(totalWidth, size)
+    frame.actionHolder:ClearAllPoints()
+    frame.actionHolder:SetPoint("TOP", frame, "BOTTOM", 0, ACTION_ICON_Y_OFFSET)
+    frame.actionHolder:Show()
+
+    for i, item in ipairs(actionItems) do
+        local btn = frame.actionButtons[i]
+        if not btn then
+            btn = CreateActionButton(frame.actionHolder)
+            frame.actionButtons[i] = btn
+        end
+
+        btn:SetSize(size, size)
+        btn:ClearAllPoints()
+        if i == 1 then
+            btn:SetPoint("LEFT", frame.actionHolder, "LEFT", 0, 0)
+        else
+            btn:SetPoint("LEFT", frame.actionButtons[i - 1], "RIGHT", spacing, 0)
+        end
+
+        btn.itemID = item.itemID
+        btn.icon:SetTexture(item.icon or 134400)
+        btn.count:SetText(item.count > 1 and tostring(item.count) or "")
+        btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
+
+        if btn._br_action_item ~= item.itemID then
+            if frame.buffCategory == "consumable" and frame.key == "weaponBuff" then
+                btn:SetAttribute("type", "macro")
+                btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
+            else
+                btn:SetAttribute("type", "item")
+                btn:SetAttribute("item", "item:" .. tostring(item.itemID))
+            end
+            btn._br_action_item = item.itemID
+        end
+
+        btn:Show()
+    end
+
+    for i = #actionItems + 1, #frame.actionButtons do
+        frame.actionButtons[i]:Hide()
+    end
+end
+
 local function UpdateActionButtons(frame, actionItems, actionSpellID)
     if testMode or InCombatLockdown() then
         if frame.actionMainButton then
             frame.actionMainButton:Hide()
+        end
+        if frame.actionHolder then
+            frame.actionHolder:Hide()
         end
         frame.actionItems = nil
         frame.actionSpellID = nil
@@ -731,10 +830,14 @@ local function UpdateActionButtons(frame, actionItems, actionSpellID)
     end
 
     if actionItems and #actionItems > 0 then
+        UpdateConsumableButtons(frame, actionItems)
         local item = actionItems[1]
         if not item then
             if frame.actionMainButton then
                 frame.actionMainButton:Hide()
+            end
+            if frame.actionHolder then
+                frame.actionHolder:Hide()
             end
             frame.actionItems = nil
             frame.actionSpellID = nil
@@ -760,6 +863,10 @@ local function UpdateActionButtons(frame, actionItems, actionSpellID)
         frame.actionItems = actionItems
         frame.actionSpellID = nil
         return
+    end
+
+    if frame.actionHolder then
+        frame.actionHolder:Hide()
     end
 
     if not actionSpellID then
