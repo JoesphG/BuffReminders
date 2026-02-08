@@ -1,0 +1,18 @@
+# Windows zone identifiers
+*:Zone.Identifier
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Lua language server
+.luarc.json
+
+# Packaging artifacts
+.pkgmeta

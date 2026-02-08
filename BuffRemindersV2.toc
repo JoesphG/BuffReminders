@@ -1,0 +1,22 @@
+## Interface: 120000
+## Title: BuffRemindersV2
+## Notes: Track missing buffs at a glance
+## Author: zerbi
+## Version: @project-version@
+## SavedVariables: BuffRemindersV2DB
+## X-Curse-Project-ID: 1441094
+## X-Wago-ID: qGYZZjNg
+## OptionalDeps: Masque
+## IconTexture: Interface\AddOns\BuffRemindersV2\icon.tga
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+Libs\LibSharedMedia-3.0\lib.xml
+
+Core.lua
+Buffs.lua
+ConsumableItems.lua
+State.lua
+Components.lua
+BuffReminders.lua
+Options.lua
