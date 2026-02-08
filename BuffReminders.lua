@@ -787,7 +787,7 @@ local function UpdateConsumableItemFrame(frame, item, missingText, entry, catego
     frame.itemID = item.itemID
     frame.icon:SetTexture(item.icon or 134400)
     frame.count:SetText(item.count > 1 and tostring(item.count) or "")
-    frame.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
+    frame.count:SetFont(fontPath, math.max(8, math.floor(size * 0.32)), "OUTLINE")
     UpdateActionButtonStyling(frame, catSettings)
 
     if missingText and missingText ~= "" and ShouldShowText(category) then
