@@ -97,6 +97,11 @@ local IsBuffEnabled = function(key)
     return BR.StateHelpers.IsBuffEnabled(key)
 end
 
+local function UseConsumableItemIcons()
+    local cs = BuffRemindersV2DB.categorySettings and BuffRemindersV2DB.categorySettings.consumable
+    return not cs or cs.useItemIcons ~= false
+end
+
 -- Default settings
 -- Note: enabledBuffs defaults to all enabled - only set false to disable by default
 local defaults = {
@@ -183,6 +188,7 @@ local defaults = {
             useCustomAppearance = false,
             split = false,
             priority = 6,
+            useItemIcons = true,
         },
         custom = {
             position = { point = "CENTER", x = 0, y = -180 },
@@ -199,6 +205,7 @@ local MISSING_TEXT_SCALE = 0.6 -- scale for "NO X" warning text
 -- Locals
 local mainFrame
 local buffFrames = {}
+local consumableItemFrames = {}
 local updateTicker
 local readyCheckTimer = nil
 local testMode = false
@@ -710,8 +717,15 @@ local function CreateActionButton(parent)
     btn.icon:SetAllPoints()
     btn.icon:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
 
+    btn.border = btn:CreateTexture(nil, "BACKGROUND")
+    btn.border:SetColorTexture(0, 0, 0, 1)
+
     btn.count = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     btn.count:SetPoint("BOTTOMRIGHT", -1, 1)
+
+    btn.missingText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
+    btn.missingText:SetPoint("CENTER", 0, 0)
+    btn.missingText:Hide()
 
     btn:SetScript("OnEnter", function(self)
         if self.itemID then
@@ -725,6 +739,80 @@ local function CreateActionButton(parent)
     end)
 
     return btn
+end
+
+local function UpdateActionButtonStyling(btn, catSettings)
+    if IsMasqueActive() then
+        btn.icon:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
+        btn.border:Hide()
+        return
+    end
+    local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
+    btn.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+    local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
+    btn.border:ClearAllPoints()
+    btn.border:SetPoint("TOPLEFT", -borderSize, borderSize)
+    btn.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
+    btn.border:Show()
+end
+
+local function AcquireConsumableItemFrame(index, parent)
+    local frame = consumableItemFrames[index]
+    if not frame then
+        frame = CreateActionButton(parent)
+        frame.buffCategory = "consumable"
+        frame.isConsumableItem = true
+        consumableItemFrames[index] = frame
+    end
+    if parent and frame:GetParent() ~= parent then
+        frame:SetParent(parent)
+        frame:ClearAllPoints()
+    end
+    return frame
+end
+
+local function HideConsumableItemFrames(startIndex)
+    for i = startIndex or 1, #consumableItemFrames do
+        consumableItemFrames[i]:Hide()
+    end
+end
+
+local function UpdateConsumableItemFrame(frame, item, missingText, entry, category)
+    local effectiveCat = (category and IsCategorySplit(category)) and category or "main"
+    local catSettings = GetCategorySettings(effectiveCat)
+    local size = catSettings.iconSize or 64
+
+    frame:SetSize(size, size)
+    frame:SetAlpha(catSettings.iconAlpha or 1)
+    frame.itemID = item.itemID
+    frame.icon:SetTexture(item.icon or 134400)
+    frame.count:SetText(item.count > 1 and tostring(item.count) or "")
+    frame.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
+    UpdateActionButtonStyling(frame, catSettings)
+
+    if missingText and missingText ~= "" and ShouldShowText(category) then
+        local tc = catSettings.textColor or { 1, 1, 1 }
+        local ta = catSettings.textAlpha or 1
+        frame.missingText:SetText(missingText)
+        frame.missingText:SetFont(fontPath, GetFontSize(MISSING_TEXT_SCALE, catSettings.textSize, catSettings.iconSize), "OUTLINE")
+        frame.missingText:SetTextColor(tc[1], tc[2], tc[3], ta)
+        frame.missingText:Show()
+    else
+        frame.missingText:Hide()
+    end
+
+    if frame._br_action_item ~= item.itemID then
+        if entry and entry.key == "weaponBuff" then
+            frame:SetAttribute("type", "macro")
+            frame:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
+        else
+            frame:SetAttribute("type", "item")
+            frame:SetAttribute("item", "item:" .. tostring(item.itemID))
+        end
+        frame._br_action_item = item.itemID
+    end
+
+    frame:Show()
 end
 
 local function EnsureMainActionButton(frame)
@@ -785,6 +873,7 @@ local function UpdateConsumableButtons(frame, actionItems)
         end
 
         btn:SetSize(size, size)
+        btn:SetAlpha(catSettings.iconAlpha or 1)
         btn:ClearAllPoints()
         if i == 1 then
             btn:SetPoint("LEFT", frame.actionHolder, "LEFT", 0, 0)
@@ -796,6 +885,8 @@ local function UpdateConsumableButtons(frame, actionItems)
         btn.icon:SetTexture(item.icon or 134400)
         btn.count:SetText(item.count > 1 and tostring(item.count) or "")
         btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
+        btn.missingText:Hide()
+        UpdateActionButtonStyling(btn, catSettings)
 
         if btn._br_action_item ~= item.itemID then
             if frame.buffCategory == "consumable" and frame.key == "weaponBuff" then
@@ -817,6 +908,18 @@ local function UpdateConsumableButtons(frame, actionItems)
 end
 
 local function UpdateActionButtons(frame, actionItems, actionSpellID)
+    if frame.buffCategory == "consumable" and UseConsumableItemIcons() then
+        if frame.actionMainButton then
+            frame.actionMainButton:Hide()
+        end
+        if frame.actionHolder then
+            frame.actionHolder:Hide()
+        end
+        frame.actionItems = actionItems
+        frame.actionSpellID = nil
+        return
+    end
+
     if testMode or InCombatLockdown() then
         if frame.actionMainButton then
             frame.actionMainButton:Hide()
@@ -1128,6 +1231,7 @@ RefreshTestDisplay = function()
             frame.testText:Hide()
         end
     end
+    HideConsumableItemFrames()
 
     local glowShown = false
 
@@ -1316,6 +1420,7 @@ end
 -- Helper to hide all display frames (mainFrame, category frames, and all buff frames)
 local function HideAllDisplayFrames()
     mainFrame:Hide()
+    HideConsumableItemFrames()
     for _, category in ipairs(CATEGORIES) do
         if categoryFrames[category] then
             categoryFrames[category]:Hide()
@@ -1460,6 +1565,7 @@ UpdateDisplay = function()
         for _, frame in pairs(buffFrames) do
             HideFrame(frame)
         end
+        HideConsumableItemFrames()
 
         -- Render pet entries (visible, but positioning deferred to UpdateFallbackDisplay)
         local petEntries = BR.BuffState.visibleByCategory.pet
@@ -1499,6 +1605,7 @@ UpdateDisplay = function()
     for _, frame in pairs(buffFrames) do
         HideFrame(frame)
     end
+    HideConsumableItemFrames()
 
     local visibleByCategory = BR.BuffState.visibleByCategory
     local anyVisible = false
@@ -1508,6 +1615,20 @@ UpdateDisplay = function()
 
     -- Collect frames for main container (non-split) in priority order
     local mainFrameBuffs = {}
+    local consumableFrameIndex = 1
+
+    local function AddConsumableItemFrames(entry, frames, parent, category)
+        if UseConsumableItemIcons() and entry.actionItems and #entry.actionItems > 0 then
+            for _, item in ipairs(entry.actionItems) do
+                local itemFrame = AcquireConsumableItemFrame(consumableFrameIndex, parent)
+                UpdateConsumableItemFrame(itemFrame, item, entry.missingText, entry, category)
+                frames[#frames + 1] = itemFrame
+                consumableFrameIndex = consumableFrameIndex + 1
+            end
+            return true
+        end
+        return false
+    end
 
     for _, catEntry in ipairs(sortedCategories) do
         local category = catEntry.name
@@ -1523,20 +1644,28 @@ UpdateDisplay = function()
                 -- Render + position this split category directly
                 local frames = {}
                 for _, entry in ipairs(entries) do
-                    local frame = buffFrames[entry.key]
-                    if frame then
-                        RenderVisibleEntry(frame, entry)
-                        frames[#frames + 1] = frame
+                    if category == "consumable" and AddConsumableItemFrames(entry, frames, categoryFrames[category], category) then
+                        -- Consumable items replace the main buff icon
+                    else
+                        local frame = buffFrames[entry.key]
+                        if frame then
+                            RenderVisibleEntry(frame, entry)
+                            frames[#frames + 1] = frame
+                        end
                     end
                 end
                 PositionSplitCategory(category, frames)
             else
                 -- Render, collect for main container
                 for _, entry in ipairs(entries) do
-                    local frame = buffFrames[entry.key]
-                    if frame then
-                        RenderVisibleEntry(frame, entry)
-                        mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                    if category == "consumable" and AddConsumableItemFrames(entry, mainFrameBuffs, mainFrame, category) then
+                        -- Consumable items replace the main buff icon
+                    else
+                        local frame = buffFrames[entry.key]
+                        if frame then
+                            RenderVisibleEntry(frame, entry)
+                            mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                        end
                     end
                 end
             end
@@ -1552,6 +1681,7 @@ UpdateDisplay = function()
     if not anyVisible then
         HideAllDisplayFrames()
     end
+    HideConsumableItemFrames(consumableFrameIndex)
     UpdateAnchor()
 end
 

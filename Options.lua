@@ -1008,6 +1008,29 @@ local function CreateOptionsPanel()
             catLayout:Add(showTextHolder, nil, COMPONENT_GAP)
         end
 
+        if category == "consumable" then
+            local useItemsHolder = Components.Checkbox(catContent, {
+                label = "Use inventory item icons",
+                get = function()
+                    local cs = db.categorySettings and db.categorySettings.consumable
+                    return not cs or cs.useItemIcons ~= false
+                end,
+                tooltip = {
+                    title = "Use inventory item icons",
+                    desc = "Show available consumables as icons in the main row instead of a separate options bar. When no items are available, the standard buff icon is shown.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("categorySettings.consumable.useItemIcons", checked)
+                    if BR.Display.IsTestMode() then
+                        RefreshTestDisplay()
+                    else
+                        UpdateDisplay()
+                    end
+                end,
+            })
+            catLayout:Add(useItemsHolder, nil, COMPONENT_GAP)
+        end
+
         -- Split frame checkbox
         local splitHolder = Components.Checkbox(catContent, {
             label = "Split into separate frame",
