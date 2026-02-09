@@ -800,6 +800,7 @@ function BuffState.Refresh()
     -- so targeted/self/consumable/custom buffs never glow. Add expiration tracking to all categories.
     local glowDefaults = db.defaults or {}
     local expirationThreshold = (glowDefaults.expirationThreshold or 15) * 60
+    local rebuffTimeWarning = (glowDefaults.rebuffTimeWarning or 30) * 60
     local showExpirationGlow = glowDefaults.showExpirationGlow ~= false
 
     -- Process raid buffs (coverage - need everyone to have them)
@@ -820,6 +821,15 @@ function BuffState.Refresh()
                 entry.countText = playerOnly and "" or (buffed .. "/" .. total)
                 entry.shouldGlow = expiringSoon or false
                 if expiringSoon and minRemaining then
+                    entry.expiringTime = minRemaining
+                end
+            elseif minRemaining and minRemaining < rebuffTimeWarning then
+                entry.visible = true
+                entry.displayType = "count"
+                entry.countText = FormatRemainingTime(minRemaining)
+                entry.rebuffWarning = true
+                entry.shouldGlow = expiringSoon or false
+                if expiringSoon then
                     entry.expiringTime = minRemaining
                 end
             elseif expiringSoon and minRemaining then
@@ -854,6 +864,15 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
+            elseif minRemaining and minRemaining < rebuffTimeWarning then
+                entry.visible = true
+                entry.displayType = "count"
+                entry.countText = FormatRemainingTime(minRemaining)
+                entry.rebuffWarning = true
+                entry.shouldGlow = expiringSoon or false
+                if expiringSoon then
+                    entry.expiringTime = minRemaining
+                end
             elseif expiringSoon and minRemaining then
                 entry.visible = true
                 entry.displayType = "expiring"

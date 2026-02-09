@@ -1,4 +1,6 @@
 local addonName, BR = ...
+BR.AddonName = addonName
+BR.DisplayName = addonName == "BuffRemindersV2" and "BuffRemindersV2" or "BuffReminders"
 
 -- Shared constants (from Core.lua)
 local DEFAULT_BORDER_SIZE = BR.DEFAULT_BORDER_SIZE
@@ -9,7 +11,7 @@ local LSM = LibStub("LibSharedMedia-3.0")
 
 -- Masque integration (optional)
 local Masque = LibStub("Masque", true)
-local masqueGroup = Masque and Masque:Group("BuffReminders")
+local masqueGroup = Masque and Masque:Group(BR.DisplayName)
 
 local function IsMasqueActive()
     return masqueGroup ~= nil and not masqueGroup.db.Disabled
@@ -34,7 +36,10 @@ end
 
 -- Global API table for external addon integration
 BuffReminders = {}
-local EXPORT_PREFIX = "!BR_"
+BuffRemindersV2 = setmetatable({}, { __index = BuffReminders })
+local EXPORT_PREFIX_BR = "!BR_"
+local EXPORT_PREFIX_V2 = "!BRV2_"
+local EXPORT_PREFIX = addonName == "BuffRemindersV2" and EXPORT_PREFIX_V2 or EXPORT_PREFIX_BR
 
 -- Buff tables from Buffs.lua (via BR namespace)
 local BUFF_TABLES = BR.BUFF_TABLES
@@ -149,6 +154,7 @@ local defaults = {
         -- Behavior (glow is global-only)
         showExpirationGlow = true,
         expirationThreshold = 15, -- minutes
+        rebuffTimeWarning = 30, -- minutes (show time + border when below this)
         glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
         -- Consumable rebuff warning
         showConsumablesWithoutItems = false,
@@ -3199,7 +3205,7 @@ end
 
 --- Export settings to a prefixed string that can be imported by other addons
 --- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
---- @return string|nil Encoded settings string with !BR_ prefix, or nil on error
+--- @return string|nil Encoded settings string with !BR_ or !BRV2_ prefix, or nil on error
 --- @return string|nil Error message if export failed
 function BuffReminders:Export(profileKey)
     local exportString, err = ExportSettings()
@@ -3210,7 +3216,7 @@ function BuffReminders:Export(profileKey)
 end
 
 --- Import settings from a prefixed string
---- @param importString string The encoded settings string (must start with !BR_)
+--- @param importString string The encoded settings string (must start with !BR_ or !BRV2_)
 --- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
 --- @return boolean success Whether the import succeeded
 --- @return string|nil error Error message if import failed
@@ -3220,13 +3226,31 @@ function BuffReminders:Import(importString, profileKey)
     end
 
     -- Validate prefix
-    if importString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then
+    local prefix = nil
+    if importString:sub(1, #EXPORT_PREFIX_BR) == EXPORT_PREFIX_BR then
+        prefix = EXPORT_PREFIX_BR
+    elseif importString:sub(1, #EXPORT_PREFIX_V2) == EXPORT_PREFIX_V2 then
+        prefix = EXPORT_PREFIX_V2
+    end
+    if not prefix then
         return false, "Invalid import string (missing prefix)"
     end
 
     -- Strip prefix and import
-    local dataString = importString:sub(#EXPORT_PREFIX + 1)
+    local dataString = importString:sub(#prefix + 1)
     return ImportSettings(dataString)
+end
+
+function BuffRemindersV2:Export(profileKey)
+    local exportString, err = ExportSettings()
+    if not exportString then
+        return nil, err
+    end
+    return EXPORT_PREFIX_V2 .. exportString
+end
+
+function BuffRemindersV2:Import(importString, profileKey)
+    return BuffReminders:Import(importString, profileKey)
 end
 
 -- Slash command handler
@@ -3240,12 +3264,12 @@ local function SlashHandler(msg)
         BuffRemindersDB.locked = true
         HideAllMovers()
         BR.Components.RefreshAll()
-        print("|cff00ccffBuffReminders:|r Frames locked.")
+        print("|cff00ccff" .. BR.DisplayName .. ":|r Frames locked.")
     elseif cmd == "unlock" then
         BuffRemindersDB.locked = false
         UpdateAnchor()
         BR.Components.RefreshAll()
-        print("|cff00ccffBuffReminders:|r Frames unlocked.")
+        print("|cff00ccff" .. BR.DisplayName .. ":|r Frames unlocked.")
     else
         BR.Options.Toggle()
     end
@@ -3277,16 +3301,27 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "ADDON_LOADED" and arg1 == addonName then
         _, playerClass = UnitClass("player")
         BR.BuffState.SetPlayerClass(playerClass)
-        if not BuffRemindersDB then
-            BuffRemindersDB = {}
+        if addonName == "BuffRemindersV2" then
+            if not BuffRemindersV2DB then
+                BuffRemindersV2DB = {}
+            end
+            BuffRemindersDB = BuffRemindersV2DB
+        else
+            if not BuffRemindersDB then
+                BuffRemindersDB = BuffRemindersV2DB or {}
+            end
         end
 
         -- Notify users about the rename (shows once)
         if not BuffRemindersDB.renameNotificationShown then
             BuffRemindersDB.renameNotificationShown = true
-            print("|cff00ccffBuffReminders:|r This addon was renamed from |cffffcc00RaidBuffsTracker|r.")
+            print("|cff00ccff" .. BR.DisplayName .. ":|r This addon was renamed from |cffffcc00RaidBuffsTracker|r.")
             print(
-                "|cff00ccffBuffReminders:|r Your previous settings could not be migrated. Use |cffffcc00/br|r to reconfigure."
+                "|cff00ccff"
+                    .. BR.DisplayName
+                    .. ":|r Your previous settings could not be migrated. Use |cffffcc00/br"
+                    .. (addonName == "BuffRemindersV2" and "v2" or "")
+                    .. "|r to reconfigure."
             )
         end
 
@@ -3294,10 +3329,14 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         if BuffRemindersDB.showLoginMessages ~= false then
             C_Timer.After(3, function()
                 print(
-                    "|cff00ccffBuffReminders:|r Heads up! Recent versions include a near-complete rewrite of the addon."
+                    "|cff00ccff"
+                        .. BR.DisplayName
+                        .. ":|r Heads up! Recent versions include a near-complete rewrite of the addon."
                 )
                 print(
-                    "|cff00ccffBuffReminders:|r Sorry if something broke! Please report issues on Discord (preferred), GitHub, or CurseForge."
+                    "|cff00ccff"
+                        .. BR.DisplayName
+                        .. ":|r Sorry if something broke! Please report issues on Discord (preferred), GitHub, or CurseForge."
                 )
             end)
         end
@@ -3329,7 +3368,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 10
+        local DB_VERSION = 11
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -3592,6 +3631,20 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             [10] = function()
                 db.consumableItems = nil
             end,
+
+            -- [11] Map legacy consumable useItemIcons setting to display mode
+            [11] = function()
+                local cs = db.categorySettings and db.categorySettings.consumable
+                if not cs or cs.useItemIcons == nil then
+                    return
+                end
+                if not db.defaults then
+                    db.defaults = {}
+                end
+                if db.defaults.consumableDisplayMode == nil then
+                    db.defaults.consumableDisplayMode = cs.useItemIcons and "icon_only" or "sub_icons"
+                end
+            end,
         }
 
         -- Run pending migrations
@@ -3648,15 +3701,17 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
 
         SLASH_BUFFREMINDERS1 = "/br"
         SLASH_BUFFREMINDERS2 = "/buffreminders"
+        SLASH_BUFFREMINDERS3 = "/brv2"
+        SLASH_BUFFREMINDERS4 = "/buffremindersv2"
         SlashCmdList["BUFFREMINDERS"] = SlashHandler
 
         -- Register with WoW's Interface Options
         local settingsPanel = CreateFrame("Frame")
-        settingsPanel.name = "BuffReminders"
+        settingsPanel.name = BR.DisplayName
 
         local title = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
         title:SetPoint("TOPLEFT", 16, -16)
-        title:SetText("BuffReminders")
+        title:SetText(BR.DisplayName)
 
         local desc = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
@@ -3676,7 +3731,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
 
         local slashInfo = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
         slashInfo:SetPoint("TOPLEFT", openBtn, "BOTTOMLEFT", 0, -12)
-        slashInfo:SetText("Slash commands: /br, /br lock, /br unlock, /br test")
+        slashInfo:SetText("Slash commands: /br, /brv2, /br lock, /br unlock, /br test")
 
         local category = Settings.RegisterCanvasLayoutCategory(settingsPanel, settingsPanel.name)
         Settings.RegisterAddOnCategory(category)

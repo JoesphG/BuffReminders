@@ -152,6 +152,7 @@
 ---@field growDirection string
 ---@field showExpirationGlow boolean
 ---@field expirationThreshold number
+---@field rebuffTimeWarning? number
 ---@field glowStyle number
 ---@field fontFace? string
 ---@field showConsumablesWithoutItems? boolean
@@ -176,6 +177,7 @@
 ---@field useCustomAppearance? boolean
 ---@field split? boolean
 ---@field clickable? boolean
+---@field useItemIcons? boolean
 ---@field priority? number
 
 --- All category settings must be defined here. When adding a new category:

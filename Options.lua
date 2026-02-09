@@ -37,6 +37,8 @@ local GlowStyles = BR.GlowStyles
 -- Export references from BuffReminders.lua
 local defaults = BR.defaults
 local LSM = BR.LSM
+local addonName = BR.AddonName or "BuffReminders"
+local displayName = BR.DisplayName or "BuffReminders"
 
 -- Helper function aliases
 local GetCategorySettings = BR.Helpers.GetCategorySettings
@@ -114,7 +116,7 @@ end
 -- ============================================================================
 
 local function CreateOptionsPanel()
-    local panel = CreatePanel("BuffRemindersOptions", PANEL_WIDTH, 597, { escClose = true })
+    local panel = CreatePanel(displayName .. "Options", PANEL_WIDTH, 597, { escClose = true })
     panel:Hide()
 
     -- Forward declarations for banner system
@@ -139,12 +141,12 @@ local function CreateOptionsPanel()
     -- Title (inline with tab row)
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", COL_PADDING, -10)
-    title:SetText("|cffffffffBuff|r|cffffcc00Reminders|r")
+    title:SetText("|cffffffff" .. displayName .. "|r")
 
     -- Version (next to title, smaller font)
     local version = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     version:SetPoint("LEFT", title, "RIGHT", 6, 0)
-    local addonVersion = C_AddOns.GetAddOnMetadata("BuffReminders", "Version") or ""
+    local addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or ""
     version:SetText(addonVersion)
 
     -- Discord link (next to version)
@@ -882,6 +884,22 @@ local function CreateOptionsPanel()
     appLayout:SetX(appX + 20)
     appLayout:Add(defThresholdHolder, nil, COMPONENT_GAP)
 
+    local rebuffWarningHolder = Components.Slider(appearanceContent, {
+        label = "Rebuff warning",
+        min = 5,
+        max = 120,
+        step = 5,
+        get = function()
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.rebuffTimeWarning or 30
+        end,
+        enabled = isExpirationGlowEnabled,
+        suffix = " min",
+        onChange = function(val)
+            BR.Config.Set("defaults.rebuffTimeWarning", val)
+        end,
+    })
+    appLayout:Add(rebuffWarningHolder, nil, COMPONENT_GAP)
+
     -- Style dropdown (on its own line)
     local styleOptions = {}
     for i, style in ipairs(GlowStyles) do
@@ -899,7 +917,7 @@ local function CreateOptionsPanel()
         onChange = function(val)
             BR.Config.Set("defaults.glowStyle", val)
         end,
-    }, "BuffRemindersDefStyleDropdown")
+    }, displayName .. "DefStyleDropdown")
     appLayout:Add(defStyleHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
     appLayout:SetX(appX)
 
@@ -1128,6 +1146,29 @@ local function CreateOptionsPanel()
                 end,
             })
             catLayout:Add(showWithoutItemsHolder, nil, COMPONENT_GAP)
+
+            local useItemsHolder = Components.Checkbox(catContent, {
+                label = "Use inventory item icons",
+                get = function()
+                    return BR.Config.Get("defaults.consumableDisplayMode", "sub_icons") == "icon_only"
+                end,
+                tooltip = {
+                    title = "Use inventory item icons",
+                    desc = "Show available consumables as icons in the main row instead of a separate options bar. When no items are available, the standard buff icon is shown.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.consumableDisplayMode", checked and "icon_only" or "sub_icons")
+                    if not db.categorySettings then
+                        db.categorySettings = {}
+                    end
+                    if not db.categorySettings.consumable then
+                        db.categorySettings.consumable = {}
+                    end
+                    db.categorySettings.consumable.useItemIcons = checked
+                    Components.RefreshAll()
+                end,
+            })
+            catLayout:Add(useItemsHolder, nil, COMPONENT_GAP)
 
             local displayModeHolder = Components.Dropdown(catContent, {
                 label = "Item display",
@@ -1725,7 +1766,7 @@ ShowGlowDemo = function()
     local numStyles = #GlowStyles
 
     local demoPanel =
-        CreatePanel("BuffRemindersGlowDemo", numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
+        CreatePanel(displayName .. "GlowDemo", numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
             strata = "TOOLTIP",
         })
 
@@ -1804,7 +1845,7 @@ StaticPopupDialogs["BUFFREMINDERS_RELOAD_UI"] = {
 }
 
 StaticPopupDialogs["BUFFREMINDERS_DISCORD_URL"] = {
-    text = "Join the BuffReminders Discord!\nCopy the URL below (Ctrl+C):",
+    text = "Join the " .. displayName .. " Discord!\nCopy the URL below (Ctrl+C):",
     button1 = "Close",
     hasEditBox = true,
     editBoxWidth = 250,
@@ -1829,8 +1870,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     end
 
     local MODAL_WIDTH = 340
-    local BASE_HEIGHT = 409
+    local BASE_HEIGHT = 270
     local ROW_HEIGHT = 26
+    local ADVANCED_HEIGHT = 240
     local CONTENT_LEFT = 20
     local ROWS_START_Y = -60
     local editingBuff = existingKey and BuffRemindersDB.customBuffs[existingKey] or nil
@@ -1846,7 +1888,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         end
     end
 
-    local modal = CreatePanel("BuffRemindersCustomBuffModal", MODAL_WIDTH, BASE_HEIGHT, {
+    local modal = CreatePanel(displayName .. "CustomBuffModal", MODAL_WIDTH, BASE_HEIGHT, {
         bgColor = { 0.1, 0.1, 0.1, 0.98 },
         borderColor = { 0.4, 0.4, 0.4, 1 },
         level = 200,
@@ -1886,8 +1928,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     spellIdsLabel:SetText("Spell IDs:")
 
     spellRows = {}
+    local advancedShown = false
 
-    local addSpellBtn, sectionsFrame
+    local addSpellBtn, advancedBtn, advancedText, advancedFrame
     local showWhenActiveToggle, invertGlowToggle
     local classDropdownHolder
     local specDropdownHolder
@@ -1909,11 +1952,16 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         addSpellBtn:ClearAllPoints()
         addSpellBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, addBtnY)
 
-        sectionsFrame:ClearAllPoints()
-        sectionsFrame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, addBtnY - 28)
+        local advancedY = addBtnY - 26
+        advancedBtn:ClearAllPoints()
+        advancedBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY)
+
+        advancedFrame:ClearAllPoints()
+        advancedFrame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY - 22)
 
         local extraRows = math.max(0, rowCount - 1)
-        modal:SetHeight(BASE_HEIGHT + (extraRows * ROW_HEIGHT))
+        local advancedExtra = advancedShown and ADVANCED_HEIGHT or 0
+        modal:SetHeight(BASE_HEIGHT + (extraRows * ROW_HEIGHT) + advancedExtra)
     end
 
     local function CreateSpellRow(initialSpellID)
@@ -2010,9 +2058,16 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         UpdateLayout()
     end)
 
-    -- Sections frame (always visible, below add-spell button)
-    sectionsFrame = CreateFrame("Frame", nil, modal)
-    sectionsFrame:SetSize(MODAL_WIDTH - 40, 240)
+    advancedBtn = CreateFrame("Button", nil, modal)
+    advancedBtn:SetSize(200, 20)
+    advancedText = advancedBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    advancedText:SetPoint("LEFT", 0, 0)
+    advancedText:SetText("[+] Show Advanced Options")
+    advancedText:SetTextColor(0.6, 0.8, 1)
+
+    advancedFrame = CreateFrame("Frame", nil, modal)
+    advancedFrame:SetSize(MODAL_WIDTH - 40, ADVANCED_HEIGHT)
+    advancedFrame:Hide()
 
     local function CreateSeparator(parent, yOff)
         local line = parent:CreateTexture(nil, "ARTWORK")
@@ -2023,12 +2078,12 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     end
 
     -- Display section
-    CreateSeparator(sectionsFrame, 0)
-    local displayLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    CreateSeparator(advancedFrame, 0)
+    local displayLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     displayLabel:SetPoint("TOPLEFT", 0, -9)
     displayLabel:SetText("Display")
 
-    local nameHolder = Components.TextInput(sectionsFrame, {
+    local nameHolder = Components.TextInput(advancedFrame, {
         label = "Display Name:",
         value = editingBuff and editingBuff.name or "",
         width = 150,
@@ -2037,7 +2092,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     nameHolder:SetPoint("TOPLEFT", 0, -25)
     nameBox = nameHolder.editBox
 
-    local missingHolder = Components.TextInput(sectionsFrame, {
+    local missingHolder = Components.TextInput(advancedFrame, {
         label = "Missing Text:",
         value = editingBuff and editingBuff.missingText and editingBuff.missingText:gsub("\n", "\\n") or "",
         width = 80,
@@ -2046,17 +2101,17 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     missingHolder:SetPoint("TOPLEFT", 0, -49)
     missingBox = missingHolder.editBox
 
-    local missingHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local missingHint = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     missingHint:SetPoint("LEFT", missingHolder, "RIGHT", 5, 0)
     missingHint:SetText("(use \\n for newline)")
 
     -- Behavior section
-    CreateSeparator(sectionsFrame, -73)
-    local behaviorLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    CreateSeparator(advancedFrame, -73)
+    local behaviorLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     behaviorLabel:SetPoint("TOPLEFT", 0, -82)
     behaviorLabel:SetText("Behavior")
 
-    showWhenActiveToggle = Components.Toggle(sectionsFrame, {
+    showWhenActiveToggle = Components.Toggle(advancedFrame, {
         label = editingBuff and editingBuff.showWhenPresent and "Show when active" or "Show when missing",
         checked = editingBuff and editingBuff.showWhenPresent or false,
         onChange = function(isChecked)
@@ -2074,7 +2129,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         missingHolder.label:SetText("Active Text:")
     end
 
-    invertGlowToggle = Components.Toggle(sectionsFrame, {
+    invertGlowToggle = Components.Toggle(advancedFrame, {
         label = editingBuff and editingBuff.invertGlow and "Detect when not glowing" or "Detect when glowing",
         checked = not (editingBuff and editingBuff.invertGlow or false),
         onChange = function(isChecked)
@@ -2088,8 +2143,8 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     invertGlowToggle:SetPoint("TOPLEFT", 0, -120)
 
     -- Filtering section
-    CreateSeparator(sectionsFrame, -144)
-    local filteringLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    CreateSeparator(advancedFrame, -144)
+    local filteringLabel = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     filteringLabel:SetPoint("TOPLEFT", 0, -153)
     filteringLabel:SetText("Filtering")
 
@@ -2122,7 +2177,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         if not specOptions then
             return
         end
-        specDropdownHolder = Components.Dropdown(sectionsFrame, {
+        specDropdownHolder = Components.Dropdown(advancedFrame, {
             label = "Only for spec:",
             options = specOptions,
             selected = selectedSpecId,
@@ -2132,7 +2187,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         specDropdownHolder:SetPoint("TOPLEFT", 0, -197)
     end
 
-    classDropdownHolder = Components.Dropdown(sectionsFrame, {
+    classDropdownHolder = Components.Dropdown(advancedFrame, {
         label = "Only for class:",
         options = classOptions,
         selected = editingBuff and editingBuff.class or nil,
@@ -2141,13 +2196,25 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         onChange = function(value)
             CreateSpecDropdown(value, nil)
         end,
-    }, "BuffRemindersCustomClassDropdown")
+    }, displayName .. "CustomClassDropdown")
     classDropdownHolder:SetPoint("TOPLEFT", 0, -169)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
         CreateSpecDropdown(editingBuff.class, editingBuff.requireSpecId)
     end
+
+    advancedBtn:SetScript("OnClick", function()
+        advancedShown = not advancedShown
+        if advancedShown then
+            advancedText:SetText("[-] Hide Advanced Options")
+            advancedFrame:Show()
+        else
+            advancedText:SetText("[+] Show Advanced Options")
+            advancedFrame:Hide()
+        end
+        UpdateLayout()
+    end)
 
     local saveError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     saveError:SetPoint("BOTTOMLEFT", 20, 42)
