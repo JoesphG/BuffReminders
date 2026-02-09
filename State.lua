@@ -156,7 +156,18 @@ local function GetActionSpellIDForBuff(buff)
     if buff.requireSpecId and GetPlayerSpecId() ~= buff.requireSpecId then
         return nil
     end
-    return GetCastableSpellID(buff.spellID)
+    local castable = GetCastableSpellID(buff.spellID)
+    if castable then
+        return castable
+    end
+    -- Fallback: if this is the player's class, use the first spellID so the icon stays clickable.
+    if buff.class and buff.class == playerClass and buff.spellID then
+        if type(buff.spellID) == "table" then
+            return buff.spellID[1]
+        end
+        return buff.spellID
+    end
+    return nil
 end
 
 ---Check if a unit is a valid group member for buff tracking

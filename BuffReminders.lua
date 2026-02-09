@@ -2489,17 +2489,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             )
         end
 
-        -- Notify users about recent rewrite (delayed, can be disabled)
-        if BuffRemindersV2DB.showLoginMessages ~= false then
-            C_Timer.After(3, function()
-                print(
-                    "|cff00ccffBuffRemindersV2:|r Heads up! Recent versions include a near-complete rewrite of the addon."
-                )
-                print(
-                    "|cff00ccffBuffRemindersV2:|r Sorry if something broke! Please report issues on Discord (preferred), GitHub, or CurseForge."
-                )
-            end)
-        end
+        -- Removed rewrite notice spam on login.
 
         -- Deep copy default values for missing keys (skips 'defaults' sub-table, served by metatable)
         local function DeepCopyDefault(source, target)
