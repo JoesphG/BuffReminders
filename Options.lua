@@ -34,7 +34,7 @@ local Consumables = BUFF_TABLES.consumable
 -- Glow styles (for ShowGlowDemo)
 local GlowStyles = BR.GlowStyles
 
--- Export references from BuffRemindersV2.lua
+-- Export references from BuffReminders.lua
 local defaults = BR.defaults
 local LSM = BR.LSM
 
@@ -114,7 +114,7 @@ end
 -- ============================================================================
 
 local function CreateOptionsPanel()
-    local panel = CreatePanel("BuffRemindersV2Options", PANEL_WIDTH, 575, { escClose = true })
+    local panel = CreatePanel("BuffRemindersOptions", PANEL_WIDTH, 597, { escClose = true })
     panel:Hide()
 
     -- Forward declarations for banner system
@@ -144,7 +144,7 @@ local function CreateOptionsPanel()
     -- Version (next to title, smaller font)
     local version = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     version:SetPoint("LEFT", title, "RIGHT", 6, 0)
-    local addonVersion = C_AddOns.GetAddOnMetadata("BuffRemindersV2", "Version") or ""
+    local addonVersion = C_AddOns.GetAddOnMetadata("BuffReminders", "Version") or ""
     version:SetText(addonVersion)
 
     -- Discord link (next to version)
@@ -179,7 +179,7 @@ local function CreateOptionsPanel()
     local BASE_SCALE = OPTIONS_BASE_SCALE
     local MIN_PCT, MAX_PCT = 80, 150
 
-    local currentScale = BuffRemindersV2DB.optionsPanelScale or BASE_SCALE
+    local currentScale = BuffRemindersDB.optionsPanelScale or BASE_SCALE
     local currentPct = math.floor(currentScale / BASE_SCALE * 100 + 0.5)
 
     -- Close button
@@ -206,17 +206,17 @@ local function CreateOptionsPanel()
     scaleUp:SetText(">")
 
     local function UpdateScaleText()
-        local pct = math.floor((BuffRemindersV2DB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
+        local pct = math.floor((BuffRemindersDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
         scaleValue:SetText(pct .. "%")
         scaleDown:SetTextColor(pct > MIN_PCT and 1 or 0.4, pct > MIN_PCT and 1 or 0.4, pct > MIN_PCT and 1 or 0.4)
         scaleUp:SetTextColor(pct < MAX_PCT and 1 or 0.4, pct < MAX_PCT and 1 or 0.4, pct < MAX_PCT and 1 or 0.4)
     end
 
     local function UpdateScale(delta)
-        local oldPct = math.floor((BuffRemindersV2DB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
+        local oldPct = math.floor((BuffRemindersDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
         local newPct = math.max(MIN_PCT, math.min(MAX_PCT, oldPct + delta))
         local newScale = newPct / 100 * BASE_SCALE
-        BuffRemindersV2DB.optionsPanelScale = newScale
+        BuffRemindersDB.optionsPanelScale = newScale
         panel:SetScale(newScale)
         UpdateScaleText()
     end
@@ -242,7 +242,7 @@ local function CreateOptionsPanel()
         UpdateScale(10)
     end)
     upBtn:SetScript("OnEnter", function()
-        local pct = math.floor((BuffRemindersV2DB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
+        local pct = math.floor((BuffRemindersDB.optionsPanelScale or BASE_SCALE) / BASE_SCALE * 100 + 0.5)
         if pct < MAX_PCT then
             scaleUp:SetTextColor(1, 0.82, 0)
         end
@@ -253,8 +253,8 @@ local function CreateOptionsPanel()
 
     UpdateScaleText()
 
-    if BuffRemindersV2DB.optionsPanelScale then
-        panel:SetScale(BuffRemindersV2DB.optionsPanelScale)
+    if BuffRemindersDB.optionsPanelScale then
+        panel:SetScale(BuffRemindersDB.optionsPanelScale)
     end
 
     -- ========== TABS ==========
@@ -316,7 +316,7 @@ local function CreateOptionsPanel()
             scrollbarWidth = SCROLLBAR_WIDTH,
         })
         scrollFrame:SetPoint("TOPLEFT", 0, CONTENT_TOP)
-        scrollFrame:SetPoint("BOTTOMRIGHT", 0, 50)
+        scrollFrame:SetPoint("BOTTOMRIGHT", 0, 46)
         scrollFrame:Hide()
 
         contentContainers[name] = scrollFrame
@@ -376,7 +376,7 @@ local function CreateOptionsPanel()
             container:ClearAllPoints()
             container:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, newTop)
             if container.GetContentFrame then
-                container:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 50)
+                container:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 46)
             end
         end
     end
@@ -419,10 +419,10 @@ local function CreateOptionsPanel()
             icons = ResolveBuffIcons(iconOverride, spellIDs),
             infoTooltip = infoTooltip,
             get = function()
-                return BuffRemindersV2DB.enabledBuffs[key] ~= false
+                return BuffRemindersDB.enabledBuffs[key] ~= false
             end,
             onChange = function(checked)
-                BuffRemindersV2DB.enabledBuffs[key] = checked
+                BuffRemindersDB.enabledBuffs[key] = checked
                 UpdateDisplay()
             end,
         })
@@ -599,12 +599,17 @@ local function CreateOptionsPanel()
 
     local customNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     customNote:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
-    customNote:SetText("(track any buff by spell ID)")
+    customNote:SetText("(track any buff/glow by spell ID)")
     buffsRightY = buffsRightY - 14
 
+    local customSectionStartY = buffsRightY
     local customBuffsContainer = CreateFrame("Frame", nil, buffsContent)
     customBuffsContainer:SetPoint("TOPLEFT", buffsRightX, buffsRightY)
     customBuffsContainer:SetSize(COL_WIDTH, 200)
+
+    local ADD_BTN_GAP = 4
+    local ADD_BTN_HEIGHT = 22
+    local CUSTOM_CONTAINER_PAD = ADD_BTN_GAP + ADD_BTN_HEIGHT + 2
 
     local function RenderCustomBuffRows()
         for _, row in ipairs(panel.customBuffRows) do
@@ -613,7 +618,7 @@ local function CreateOptionsPanel()
         end
         panel.customBuffRows = {}
 
-        local db = BuffRemindersV2DB
+        local db = BuffRemindersDB
         local rowY = 0
 
         local sortedKeys = {}
@@ -632,10 +637,10 @@ local function CreateOptionsPanel()
                 label = customBuff.name or ("Spell " .. tostring(customBuff.spellID)),
                 icons = ResolveBuffIcons(nil, customBuff.spellID),
                 get = function()
-                    return BuffRemindersV2DB.enabledBuffs[key] ~= false
+                    return BuffRemindersDB.enabledBuffs[key] ~= false
                 end,
                 onChange = function(checked)
-                    BuffRemindersV2DB.enabledBuffs[key] = checked
+                    BuffRemindersDB.enabledBuffs[key] = checked
                     UpdateDisplay()
                 end,
                 onRightClick = function()
@@ -653,20 +658,20 @@ local function CreateOptionsPanel()
         local addBtn = CreateButton(customBuffsContainer, "+ Add Custom Buff", function()
             ShowCustomBuffModal(nil, RenderCustomBuffRows)
         end)
-        addBtn:SetPoint("TOPLEFT", 0, rowY - 4)
+        addBtn:SetPoint("TOPLEFT", 0, rowY - ADD_BTN_GAP)
         table.insert(panel.customBuffRows, addBtn)
 
-        customBuffsContainer:SetHeight(math.abs(rowY) + 30)
+        customBuffsContainer:SetHeight(math.abs(rowY) + CUSTOM_CONTAINER_PAD)
+
+        -- Recalculate content height when custom buffs change
+        local effectiveRightY = customSectionStartY + rowY - CUSTOM_CONTAINER_PAD
+        buffsContent:SetHeight(math.max(math.abs(buffsLeftY), math.abs(effectiveRightY)) + 4)
 
         return rowY
     end
 
     panel.RenderCustomBuffRows = RenderCustomBuffRows
-    local customEndY = RenderCustomBuffRows()
-    buffsRightY = buffsRightY + customEndY - 20
-
-    -- Set buffs content height (use the taller column)
-    buffsContent:SetHeight(math.max(math.abs(buffsLeftY), math.abs(buffsRightY)) + 10)
+    RenderCustomBuffRows()
 
     -- ========== APPEARANCE TAB ==========
     local appearanceContent, _ = CreateScrollableContent("appearance")
@@ -688,7 +693,7 @@ local function CreateOptionsPanel()
         min = 16,
         max = 128,
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.iconSize or 64
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.iconSize or 64
         end,
         onChange = function(val)
             BR.Config.Set("defaults.iconSize", val)
@@ -700,7 +705,7 @@ local function CreateOptionsPanel()
         min = 0,
         max = 15,
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.iconZoom or DEFAULT_ICON_ZOOM
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.iconZoom or DEFAULT_ICON_ZOOM
         end,
         enabled = function()
             return not IsMasqueActive()
@@ -717,7 +722,7 @@ local function CreateOptionsPanel()
         min = 0,
         max = 8,
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.borderSize or DEFAULT_BORDER_SIZE
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.borderSize or DEFAULT_BORDER_SIZE
         end,
         enabled = function()
             return not IsMasqueActive()
@@ -733,7 +738,7 @@ local function CreateOptionsPanel()
         min = 10,
         max = 100,
         get = function()
-            return math.floor((BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.iconAlpha or 1) * 100)
+            return math.floor((BuffRemindersDB.defaults and BuffRemindersDB.defaults.iconAlpha or 1) * 100)
         end,
         suffix = "%",
         onChange = function(val)
@@ -747,7 +752,7 @@ local function CreateOptionsPanel()
         min = 0,
         max = 50,
         get = function()
-            return math.floor((BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.spacing or 0.2) * 100)
+            return math.floor((BuffRemindersDB.defaults and BuffRemindersDB.defaults.spacing or 0.2) * 100)
         end,
         suffix = "%",
         onChange = function(val)
@@ -760,7 +765,7 @@ local function CreateOptionsPanel()
         min = 6,
         max = 32,
         get = function()
-            local db = BuffRemindersV2DB.defaults
+            local db = BuffRemindersDB.defaults
             if db and db.textSize then
                 return db.textSize
             end
@@ -778,8 +783,8 @@ local function CreateOptionsPanel()
         labelWidth = 0,
         hasOpacity = true,
         get = function()
-            local tc = BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.textColor or { 1, 1, 1 }
-            local ta = BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.textAlpha or 1
+            local tc = BuffRemindersDB.defaults and BuffRemindersDB.defaults.textColor or { 1, 1, 1 }
+            local ta = BuffRemindersDB.defaults and BuffRemindersDB.defaults.textAlpha or 1
             return tc[1], tc[2], tc[3], ta
         end,
         onChange = function(r, g, b, a)
@@ -816,7 +821,7 @@ local function CreateOptionsPanel()
             end
         end,
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.fontFace or nil
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.fontFace or nil
         end,
         onChange = function(val)
             BR.Config.Set("defaults.fontFace", val)
@@ -826,7 +831,7 @@ local function CreateOptionsPanel()
 
     local defDirHolder = Components.DirectionButtons(appearanceContent, {
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.growDirection or "CENTER"
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.growDirection or "CENTER"
         end,
         onChange = function(dir)
             BR.Config.Set("defaults.growDirection", dir)
@@ -848,7 +853,7 @@ local function CreateOptionsPanel()
     local defGlowHolder = Components.Checkbox(appearanceContent, {
         label = "Show expiration glow",
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.showExpirationGlow ~= false
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
         end,
         onChange = function(checked)
             BR.Config.Set("defaults.showExpirationGlow", checked)
@@ -858,7 +863,7 @@ local function CreateOptionsPanel()
     appLayout:Add(defGlowHolder, nil, COMPONENT_GAP)
 
     local function isExpirationGlowEnabled()
-        return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.showExpirationGlow ~= false
+        return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
     end
 
     local defThresholdHolder = Components.Slider(appearanceContent, {
@@ -866,7 +871,7 @@ local function CreateOptionsPanel()
         min = 1,
         max = 15,
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.expirationThreshold or 15
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.expirationThreshold or 15
         end,
         enabled = isExpirationGlowEnabled,
         suffix = " min",
@@ -876,22 +881,6 @@ local function CreateOptionsPanel()
     })
     appLayout:SetX(appX + 20)
     appLayout:Add(defThresholdHolder, nil, COMPONENT_GAP)
-
-    local rebuffWarningHolder = Components.Slider(appearanceContent, {
-        label = "Rebuff warning",
-        min = 5,
-        max = 120,
-        step = 5,
-        get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.rebuffTimeWarning or 30
-        end,
-        enabled = isExpirationGlowEnabled,
-        suffix = " min",
-        onChange = function(val)
-            BR.Config.Set("defaults.rebuffTimeWarning", val)
-        end,
-    })
-    appLayout:Add(rebuffWarningHolder, nil, COMPONENT_GAP)
 
     -- Style dropdown (on its own line)
     local styleOptions = {}
@@ -903,14 +892,14 @@ local function CreateOptionsPanel()
         label = "Style:",
         options = styleOptions,
         get = function()
-            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.glowStyle or 1
+            return BuffRemindersDB.defaults and BuffRemindersDB.defaults.glowStyle or 1
         end,
         enabled = isExpirationGlowEnabled,
         width = 100,
         onChange = function(val)
             BR.Config.Set("defaults.glowStyle", val)
         end,
-    }, "BuffRemindersV2DefStyleDropdown")
+    }, "BuffRemindersDefStyleDropdown")
     appLayout:Add(defStyleHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
     appLayout:SetX(appX)
 
@@ -957,7 +946,7 @@ local function CreateOptionsPanel()
         local catContent = section:GetContentFrame()
         local catLayout = Components.VerticalLayout(catContent, { x = 0, y = 0 })
 
-        local db = BuffRemindersV2DB
+        local db = BuffRemindersDB
 
         -- Visibility callback for W/S/D/R toggles
         local function OnCategoryVisibilityChange()
@@ -980,14 +969,30 @@ local function CreateOptionsPanel()
             local hideMountHolder = Components.Checkbox(catContent, {
                 label = "Hide while mounted",
                 get = function()
-                    return BuffRemindersV2DB.hidePetWhileMounted ~= false
+                    return BuffRemindersDB.hidePetWhileMounted ~= false
                 end,
                 onChange = function(checked)
-                    BuffRemindersV2DB.hidePetWhileMounted = checked
+                    BuffRemindersDB.hidePetWhileMounted = checked
                     UpdateDisplay()
                 end,
             })
             catLayout:Add(hideMountHolder, nil, COMPONENT_GAP)
+
+            local passiveCombatHolder = Components.Checkbox(catContent, {
+                label = "Pet passive only in combat",
+                get = function()
+                    return BuffRemindersDB.petPassiveOnlyInCombat == true
+                end,
+                tooltip = {
+                    title = "Pet passive only in combat",
+                    desc = "Only show the passive pet reminder while in combat. When disabled, the reminder is always shown.",
+                },
+                onChange = function(checked)
+                    BuffRemindersDB.petPassiveOnlyInCombat = checked
+                    UpdateDisplay()
+                end,
+            })
+            catLayout:Add(passiveCombatHolder, nil, COMPONENT_GAP)
         end
 
         -- "BUFF!" text (raid only)
@@ -1024,27 +1029,125 @@ local function CreateOptionsPanel()
             catLayout:Add(showTextHolder, nil, COMPONENT_GAP)
         end
 
-        if category == "consumable" then
-            local useItemsHolder = Components.Checkbox(catContent, {
-                label = "Use inventory item icons",
+        -- Click to cast checkbox (raid and consumable only)
+        if category == "raid" or category == "consumable" then
+            local clickableHolder = Components.Checkbox(catContent, {
+                label = "Click to cast",
                 get = function()
-                    local cs = db.categorySettings and db.categorySettings.consumable
-                    return not cs or cs.useItemIcons ~= false
+                    local cs = db.categorySettings and db.categorySettings[category]
+                    return cs and cs.clickable == true
                 end,
                 tooltip = {
-                    title = "Use inventory item icons",
-                    desc = "Show available consumables as icons in the main row instead of a separate options bar. When no items are available, the standard buff icon is shown.",
+                    title = "Click to cast",
+                    desc = "Make buff icons clickable to cast the corresponding spell (out of combat only). "
+                        .. "Only works for spells your character can cast.",
                 },
                 onChange = function(checked)
-                    BR.Config.Set("categorySettings.consumable.useItemIcons", checked)
-                    if BR.Display.IsTestMode() then
-                        RefreshTestDisplay()
-                    else
-                        UpdateDisplay()
+                    if not db.categorySettings then
+                        db.categorySettings = {}
                     end
+                    if not db.categorySettings[category] then
+                        db.categorySettings[category] = {}
+                    end
+                    db.categorySettings[category].clickable = checked
+                    BR.Display.UpdateActionButtons(category)
+                    Components.RefreshAll()
                 end,
             })
-            catLayout:Add(useItemsHolder, nil, COMPONENT_GAP)
+            catLayout:Add(clickableHolder, nil, COMPONENT_GAP)
+        end
+
+        -- Consumable rebuff warning (consumable category only)
+        if category == "consumable" then
+            local rebuffHolder = Components.Checkbox(catContent, {
+                label = "Show rebuff warning",
+                get = function()
+                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
+                end,
+                tooltip = {
+                    title = "Consumable rebuff warning",
+                    desc = "Show a pulsing border and countdown timer on consumable icons when the buff is about to expire.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.consumableRebuffWarning", checked)
+                    Components.RefreshAll()
+                end,
+            })
+            local rebuffColorHolder = Components.ColorSwatch(catContent, {
+                label = "",
+                labelWidth = 0,
+                get = function()
+                    local c = BR.Config.Get("defaults.consumableRebuffColor", { 1, 0.5, 0 })
+                    return c[1], c[2], c[3]
+                end,
+                enabled = function()
+                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
+                end,
+                onChange = function(r, g, b)
+                    BR.Config.Set("defaults.consumableRebuffColor", { r, g, b })
+                end,
+            })
+
+            local rebuffThresholdHolder = Components.Slider(catContent, {
+                label = "",
+                labelWidth = 0,
+                min = 5,
+                max = 60,
+                step = 5,
+                suffix = " min",
+                get = function()
+                    return BR.Config.Get("defaults.consumableRebuffThreshold", 10)
+                end,
+                enabled = function()
+                    return BR.Config.Get("defaults.consumableRebuffWarning", true) ~= false
+                end,
+                tooltip = {
+                    title = "Rebuff warning threshold",
+                    desc = "Show the rebuff warning when a consumable buff has less than this many minutes remaining.",
+                },
+                onChange = function(val)
+                    BR.Config.Set("defaults.consumableRebuffThreshold", val)
+                end,
+            })
+
+            catLayout:Add(rebuffHolder, nil, COMPONENT_GAP)
+            rebuffThresholdHolder:SetPoint("LEFT", rebuffHolder, "RIGHT", 8, 0)
+            rebuffColorHolder:SetPoint("LEFT", rebuffThresholdHolder, "RIGHT", 12, 0)
+
+            local showWithoutItemsHolder = Components.Checkbox(catContent, {
+                label = "Show when not in bags",
+                get = function()
+                    return BR.Config.Get("defaults.showConsumablesWithoutItems", false) == true
+                end,
+                tooltip = {
+                    title = "Show consumables without items",
+                    desc = "When enabled, consumable reminders are shown even if you don't have the item in your bags. When disabled, only consumables you actually carry are shown.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.showConsumablesWithoutItems", checked)
+                end,
+            })
+            catLayout:Add(showWithoutItemsHolder, nil, COMPONENT_GAP)
+
+            local displayModeHolder = Components.Dropdown(catContent, {
+                label = "Item display",
+                get = function()
+                    return BR.Config.Get("defaults.consumableDisplayMode", "sub_icons")
+                end,
+                options = {
+                    { value = "icon_only", label = "Icon only" },
+                    { value = "sub_icons", label = "Sub-icons" },
+                    { value = "expanded", label = "Expanded" },
+                },
+                tooltip = {
+                    title = "Consumable item display",
+                    desc = "Icon only: show the top item icon only. Sub-icons: show small clickable icons below the main icon. Expanded: show each item variant as a full-sized icon in the row.",
+                },
+                onChange = function(val)
+                    BR.Config.Set("defaults.consumableDisplayMode", val)
+                end,
+            })
+            catLayout:Add(displayModeHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
         end
 
         -- Split frame checkbox
@@ -1370,22 +1473,35 @@ local function CreateOptionsPanel()
     local groupHolder = Components.Checkbox(settingsContent, {
         label = "Show only in group/raid",
         get = function()
-            return BuffRemindersV2DB.showOnlyInGroup ~= false
+            return BuffRemindersDB.showOnlyInGroup ~= false
         end,
         onChange = function(checked)
-            BuffRemindersV2DB.showOnlyInGroup = checked
+            BuffRemindersDB.showOnlyInGroup = checked
             UpdateDisplay()
         end,
     })
     setLayout:Add(groupHolder, nil, COMPONENT_GAP)
 
+    local restingHolder = Components.Checkbox(settingsContent, {
+        label = "Hide while resting",
+        get = function()
+            return BuffRemindersDB.hideWhileResting == true
+        end,
+        tooltip = { title = "Hide while resting", desc = "Hide buff reminders while in inns or capital cities" },
+        onChange = function(checked)
+            BuffRemindersDB.hideWhileResting = checked
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(restingHolder, nil, COMPONENT_GAP)
+
     local readyCheckHolder = Components.Checkbox(settingsContent, {
         label = "Show only on ready check",
         get = function()
-            return BuffRemindersV2DB.showOnlyOnReadyCheck == true
+            return BuffRemindersDB.showOnlyOnReadyCheck == true
         end,
         onChange = function(checked)
-            BuffRemindersV2DB.showOnlyOnReadyCheck = checked
+            BuffRemindersDB.showOnlyOnReadyCheck = checked
             UpdateDisplay()
             Components.RefreshAll()
         end,
@@ -1397,16 +1513,16 @@ local function CreateOptionsPanel()
         min = 10,
         max = 30,
         get = function()
-            return BuffRemindersV2DB.readyCheckDuration or 15
+            return BuffRemindersDB.readyCheckDuration or 15
         end,
         enabled = function()
-            return BuffRemindersV2DB.showOnlyOnReadyCheck == true
+            return BuffRemindersDB.showOnlyOnReadyCheck == true
         end,
         suffix = "s",
         labelWidth = 55,
         sliderWidth = 70,
         onChange = function(val)
-            BuffRemindersV2DB.readyCheckDuration = val
+            BuffRemindersDB.readyCheckDuration = val
         end,
     })
     setLayout:SetX(setX + 20)
@@ -1416,11 +1532,11 @@ local function CreateOptionsPanel()
     local playerClassHolder = Components.Checkbox(settingsContent, {
         label = "Show only my class buffs",
         get = function()
-            return BuffRemindersV2DB.showOnlyPlayerClassBuff == true
+            return BuffRemindersDB.showOnlyPlayerClassBuff == true
         end,
         tooltip = { title = "Show only my class buffs", desc = "Only show buffs that your class can provide" },
         onChange = function(checked)
-            BuffRemindersV2DB.showOnlyPlayerClassBuff = checked
+            BuffRemindersDB.showOnlyPlayerClassBuff = checked
             UpdateDisplay()
         end,
     })
@@ -1429,11 +1545,11 @@ local function CreateOptionsPanel()
     local playerMissingHolder = Components.Checkbox(settingsContent, {
         label = "Show only buffs I'm missing",
         get = function()
-            return BuffRemindersV2DB.showOnlyPlayerMissing == true
+            return BuffRemindersDB.showOnlyPlayerMissing == true
         end,
         tooltip = { title = "Show only buffs I'm missing", desc = "Only show buffs you personally are missing" },
         onChange = function(checked)
-            BuffRemindersV2DB.showOnlyPlayerMissing = checked
+            BuffRemindersDB.showOnlyPlayerMissing = checked
             UpdateDisplay()
         end,
     })
@@ -1442,10 +1558,10 @@ local function CreateOptionsPanel()
     local loginMsgHolder = Components.Checkbox(settingsContent, {
         label = "Show login messages",
         get = function()
-            return BuffRemindersV2DB.showLoginMessages ~= false
+            return BuffRemindersDB.showLoginMessages ~= false
         end,
         onChange = function(checked)
-            BuffRemindersV2DB.showLoginMessages = checked
+            BuffRemindersDB.showLoginMessages = checked
         end,
     })
     setLayout:Add(loginMsgHolder)
@@ -1481,7 +1597,7 @@ local function CreateOptionsPanel()
     profLayout:Add(exportTextArea, 80, COMPONENT_GAP)
 
     local exportButton = CreateButton(profilesContent, "Export", function()
-        local exportString, err = BuffRemindersV2:Export()
+        local exportString, err = BuffReminders:Export()
         if exportString then
             exportTextArea:SetText(exportString)
             exportTextArea:HighlightText()
@@ -1512,7 +1628,7 @@ local function CreateOptionsPanel()
 
     local importButton = CreateButton(profilesContent, "Import", function()
         local importString = importTextArea:GetText()
-        local success, err = BuffRemindersV2:Import(importString)
+        local success, err = BuffReminders:Import(importString)
         if success then
             importStatus:SetText("|cff00ff00Settings imported successfully!|r")
             StaticPopup_Show("BUFFREMINDERS_RELOAD_UI")
@@ -1543,14 +1659,18 @@ local function CreateOptionsPanel()
 
     local BTN_WIDTH = 80
 
-    local lockBtn = CreateButton(btnHolder, "Unlock", function(self)
-        local locked = BR.Display.ToggleLock()
-        self.text:SetText(locked and "Unlock" or "Lock")
+    local lockBtn = CreateButton(btnHolder, "Unlock", function()
+        BR.Display.ToggleLock()
+        Components.RefreshAll()
     end, { title = "Lock / Unlock", desc = "Unlock to show anchor handles for repositioning buff frames." })
     lockBtn:SetSize(BTN_WIDTH, 22)
     lockBtn:SetPoint("RIGHT", btnHolder, "CENTER", -4, 0)
-    lockBtn.text:SetText(BuffRemindersV2DB.locked and "Unlock" or "Lock")
-    panel.lockBtn = lockBtn
+
+    function lockBtn:Refresh()
+        self.text:SetText(BuffRemindersDB.locked and "Unlock" or "Lock")
+    end
+    lockBtn:Refresh()
+    table.insert(BR.RefreshableComponents, lockBtn)
 
     local testBtn = CreateButton(btnHolder, "Stop Test", function(self)
         local isOn = ToggleTestMode()
@@ -1589,7 +1709,6 @@ local function ToggleOptions()
         else
             optionsPanel.testBtn.text:SetText("Test")
         end
-        optionsPanel.lockBtn.text:SetText(BuffRemindersV2DB.locked and "Unlock" or "Lock")
         optionsPanel:Show()
     end
 end
@@ -1606,7 +1725,7 @@ ShowGlowDemo = function()
     local numStyles = #GlowStyles
 
     local demoPanel =
-        CreatePanel("BuffRemindersV2GlowDemo", numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
+        CreatePanel("BuffRemindersGlowDemo", numStyles * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
             strata = "TOOLTIP",
         })
 
@@ -1656,8 +1775,8 @@ StaticPopupDialogs["BUFFREMINDERS_DELETE_CUSTOM"] = {
     button2 = "Cancel",
     OnAccept = function(_, data)
         if data and data.key then
-            BuffRemindersV2DB.customBuffs[data.key] = nil
-            BuffRemindersV2DB.enabledBuffs[data.key] = nil
+            BuffRemindersDB.customBuffs[data.key] = nil
+            BuffRemindersDB.enabledBuffs[data.key] = nil
             RemoveCustomBuffFrame(data.key)
             if data.refreshPanel then
                 data.refreshPanel()
@@ -1685,7 +1804,7 @@ StaticPopupDialogs["BUFFREMINDERS_RELOAD_UI"] = {
 }
 
 StaticPopupDialogs["BUFFREMINDERS_DISCORD_URL"] = {
-    text = "Join the BuffRemindersV2 Discord!\nCopy the URL below (Ctrl+C):",
+    text = "Join the BuffReminders Discord!\nCopy the URL below (Ctrl+C):",
     button1 = "Close",
     hasEditBox = true,
     editBoxWidth = 250,
@@ -1710,12 +1829,11 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     end
 
     local MODAL_WIDTH = 340
-    local BASE_HEIGHT = 270
+    local BASE_HEIGHT = 409
     local ROW_HEIGHT = 26
-    local ADVANCED_HEIGHT = 115
     local CONTENT_LEFT = 20
     local ROWS_START_Y = -60
-    local editingBuff = existingKey and BuffRemindersV2DB.customBuffs[existingKey] or nil
+    local editingBuff = existingKey and BuffRemindersDB.customBuffs[existingKey] or nil
 
     local existingSpellIDs = {}
     if editingBuff then
@@ -1728,7 +1846,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         end
     end
 
-    local modal = CreatePanel("BuffRemindersV2CustomBuffModal", MODAL_WIDTH, BASE_HEIGHT, {
+    local modal = CreatePanel("BuffRemindersCustomBuffModal", MODAL_WIDTH, BASE_HEIGHT, {
         bgColor = { 0.1, 0.1, 0.1, 0.98 },
         borderColor = { 0.4, 0.4, 0.4, 1 },
         level = 200,
@@ -1768,9 +1886,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     spellIdsLabel:SetText("Spell IDs:")
 
     spellRows = {}
-    local advancedShown = false
 
-    local addSpellBtn, advancedBtn, advancedText, advancedFrame
+    local addSpellBtn, sectionsFrame
+    local showWhenActiveToggle, invertGlowToggle
     local classDropdownHolder
     local specDropdownHolder
 
@@ -1791,16 +1909,11 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         addSpellBtn:ClearAllPoints()
         addSpellBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, addBtnY)
 
-        local advancedY = addBtnY - 26
-        advancedBtn:ClearAllPoints()
-        advancedBtn:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY)
-
-        advancedFrame:ClearAllPoints()
-        advancedFrame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, advancedY - 22)
+        sectionsFrame:ClearAllPoints()
+        sectionsFrame:SetPoint("TOPLEFT", modal, "TOPLEFT", CONTENT_LEFT, addBtnY - 28)
 
         local extraRows = math.max(0, rowCount - 1)
-        local advancedExtra = advancedShown and ADVANCED_HEIGHT or 0
-        modal:SetHeight(BASE_HEIGHT + (extraRows * ROW_HEIGHT) + advancedExtra)
+        modal:SetHeight(BASE_HEIGHT + (extraRows * ROW_HEIGHT))
     end
 
     local function CreateSpellRow(initialSpellID)
@@ -1897,42 +2010,88 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         UpdateLayout()
     end)
 
-    advancedBtn = CreateFrame("Button", nil, modal)
-    advancedBtn:SetSize(200, 20)
-    advancedText = advancedBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    advancedText:SetPoint("LEFT", 0, 0)
-    advancedText:SetText("[+] Show Advanced Options")
-    advancedText:SetTextColor(0.6, 0.8, 1)
+    -- Sections frame (always visible, below add-spell button)
+    sectionsFrame = CreateFrame("Frame", nil, modal)
+    sectionsFrame:SetSize(MODAL_WIDTH - 40, 240)
 
-    advancedFrame = CreateFrame("Frame", nil, modal)
-    advancedFrame:SetSize(MODAL_WIDTH - 40, ADVANCED_HEIGHT)
-    advancedFrame:Hide()
+    local function CreateSeparator(parent, yOff)
+        local line = parent:CreateTexture(nil, "ARTWORK")
+        line:SetHeight(1)
+        line:SetPoint("TOPLEFT", 0, yOff)
+        line:SetPoint("RIGHT", 0, 0)
+        line:SetColorTexture(0.25, 0.25, 0.25, 0.8)
+    end
 
-    local advY = 0
+    -- Display section
+    CreateSeparator(sectionsFrame, 0)
+    local displayLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    displayLabel:SetPoint("TOPLEFT", 0, -9)
+    displayLabel:SetText("Display")
 
-    local nameHolder = Components.TextInput(advancedFrame, {
+    local nameHolder = Components.TextInput(sectionsFrame, {
         label = "Display Name:",
         value = editingBuff and editingBuff.name or "",
         width = 150,
         labelWidth = 85,
     })
-    nameHolder:SetPoint("TOPLEFT", 0, advY)
+    nameHolder:SetPoint("TOPLEFT", 0, -25)
     nameBox = nameHolder.editBox
-    advY = advY - 25
 
-    local missingHolder = Components.TextInput(advancedFrame, {
+    local missingHolder = Components.TextInput(sectionsFrame, {
         label = "Missing Text:",
         value = editingBuff and editingBuff.missingText and editingBuff.missingText:gsub("\n", "\\n") or "",
         width = 80,
         labelWidth = 85,
     })
-    missingHolder:SetPoint("TOPLEFT", 0, advY)
+    missingHolder:SetPoint("TOPLEFT", 0, -49)
     missingBox = missingHolder.editBox
 
-    local missingHint = advancedFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local missingHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     missingHint:SetPoint("LEFT", missingHolder, "RIGHT", 5, 0)
     missingHint:SetText("(use \\n for newline)")
-    advY = advY - 25
+
+    -- Behavior section
+    CreateSeparator(sectionsFrame, -73)
+    local behaviorLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    behaviorLabel:SetPoint("TOPLEFT", 0, -82)
+    behaviorLabel:SetText("Behavior")
+
+    showWhenActiveToggle = Components.Toggle(sectionsFrame, {
+        label = editingBuff and editingBuff.showWhenPresent and "Show when active" or "Show when missing",
+        checked = editingBuff and editingBuff.showWhenPresent or false,
+        onChange = function(isChecked)
+            if isChecked then
+                showWhenActiveToggle.label:SetText("Show when active")
+                missingHolder.label:SetText("Active Text:")
+            else
+                showWhenActiveToggle.label:SetText("Show when missing")
+                missingHolder.label:SetText("Missing Text:")
+            end
+        end,
+    })
+    showWhenActiveToggle:SetPoint("TOPLEFT", 0, -98)
+    if editingBuff and editingBuff.showWhenPresent then
+        missingHolder.label:SetText("Active Text:")
+    end
+
+    invertGlowToggle = Components.Toggle(sectionsFrame, {
+        label = editingBuff and editingBuff.invertGlow and "Detect when not glowing" or "Detect when glowing",
+        checked = not (editingBuff and editingBuff.invertGlow or false),
+        onChange = function(isChecked)
+            if isChecked then
+                invertGlowToggle.label:SetText("Detect when glowing")
+            else
+                invertGlowToggle.label:SetText("Detect when not glowing")
+            end
+        end,
+    })
+    invertGlowToggle:SetPoint("TOPLEFT", 0, -120)
+
+    -- Filtering section
+    CreateSeparator(sectionsFrame, -144)
+    local filteringLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    filteringLabel:SetPoint("TOPLEFT", 0, -153)
+    filteringLabel:SetText("Filtering")
 
     local classOptions = {
         { value = nil, label = "Any" },
@@ -1963,17 +2122,17 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         if not specOptions then
             return
         end
-        specDropdownHolder = Components.Dropdown(advancedFrame, {
+        specDropdownHolder = Components.Dropdown(sectionsFrame, {
             label = "Only for spec:",
             options = specOptions,
             selected = selectedSpecId,
             width = 130,
             onChange = function() end,
         })
-        specDropdownHolder:SetPoint("TOPLEFT", 0, advY - 28)
+        specDropdownHolder:SetPoint("TOPLEFT", 0, -197)
     end
 
-    classDropdownHolder = Components.Dropdown(advancedFrame, {
+    classDropdownHolder = Components.Dropdown(sectionsFrame, {
         label = "Only for class:",
         options = classOptions,
         selected = editingBuff and editingBuff.class or nil,
@@ -1982,25 +2141,13 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         onChange = function(value)
             CreateSpecDropdown(value, nil)
         end,
-    }, "BuffRemindersV2CustomClassDropdown")
-    classDropdownHolder:SetPoint("TOPLEFT", 0, advY)
+    }, "BuffRemindersCustomClassDropdown")
+    classDropdownHolder:SetPoint("TOPLEFT", 0, -169)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
-        CreateSpecDropdown(editingBuff.class, editingBuff.specId)
+        CreateSpecDropdown(editingBuff.class, editingBuff.requireSpecId)
     end
-
-    advancedBtn:SetScript("OnClick", function()
-        advancedShown = not advancedShown
-        if advancedShown then
-            advancedText:SetText("[-] Hide Advanced Options")
-            advancedFrame:Show()
-        else
-            advancedText:SetText("[+] Show Advanced Options")
-            advancedFrame:Hide()
-        end
-        UpdateLayout()
-    end)
 
     local saveError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     saveError:SetPoint("BOTTOMLEFT", 20, 42)
@@ -2051,7 +2198,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             displayName = firstName or ("Spell " .. validatedIDs[1])
         end
 
-        local missingTextValue = missingBox:GetText()
+        local missingTextValue = strtrim(missingBox:GetText())
         if missingTextValue ~= "" then
             missingTextValue = missingTextValue:gsub("\\n", "\n")
         else
@@ -2064,10 +2211,12 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             name = displayName,
             missingText = missingTextValue,
             class = classDropdownHolder:GetValue(),
-            specId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
+            requireSpecId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
+            showWhenPresent = showWhenActiveToggle:GetChecked() or nil,
+            invertGlow = (not invertGlowToggle:GetChecked()) or nil,
         }
 
-        BuffRemindersV2DB.customBuffs[key] = customBuff
+        BuffRemindersDB.customBuffs[key] = customBuff
 
         if not existingKey then
             CreateCustomBuffFrameRuntime(customBuff)

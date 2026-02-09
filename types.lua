@@ -15,6 +15,10 @@
 ---@field SetAllPoints fun(self: Texture, target?: any)
 ---@field SetTexCoord fun(self: Texture, left: number, right: number, top: number, bottom: number)
 ---@field SetTexture fun(self: Texture, texture: number|string)
+---@field SetAtlas fun(self: Texture, atlas: string)
+---@field SetSize fun(self: Texture, width: number, height: number)
+---@field Show fun(self: Texture)
+---@field Hide fun(self: Texture)
 
 ---@class FontString
 ---@field SetFont fun(self: FontString, font: string, size: number, flags?: string)
@@ -92,6 +96,7 @@
 ---@field itemID? number|number[] Check if player has this item in inventory
 ---@field readyCheckOnly? boolean Only show during ready checks
 ---@field infoTooltip? string Tooltip text shown on hover (pipe-separated: title|description)
+---@field visibilityCondition? fun(): boolean Custom function that gates visibility (return false to hide)
 
 ---@class BuffGroup
 ---@field displayName string
@@ -102,12 +107,15 @@
 ---@field name string
 ---@field missingText? string
 ---@field class? ClassName
----@field specId? number
+---@field requireSpecId? number
+---@field showWhenPresent? boolean  -- Show icon when buff IS on player (default: show when missing)
+---@field invertGlow? boolean       -- TODO: rename to something clearer (e.g. showWhenNotGlowing) — "invertGlow" doesn't convey the actual behavior: fallback triggers when spell is NOT glowing (default: when glowing)
 
 ---@class BuffFrame: Button
 ---@field key string
 ---@field spellIDs SpellID
 ---@field displayName string
+---@field buffDef table
 ---@field icon Texture
 ---@field border Texture
 ---@field count FontString
@@ -119,6 +127,11 @@
 ---@field glowAnim? AnimationGroup
 ---@field glowShowing? boolean
 ---@field currentGlowStyle? number
+---@field clickOverlay? Button
+---@field actionButtons? Button[]
+---@field extraFrames? table[]
+---@field isExtraFrame? boolean
+---@field mainFrame? BuffFrame
 
 ---@alias CategoryName "raid"|"presence"|"targeted"|"self"|"pet"|"consumable"|"custom"
 
@@ -141,6 +154,11 @@
 ---@field expirationThreshold number
 ---@field glowStyle number
 ---@field fontFace? string
+---@field showConsumablesWithoutItems? boolean
+---@field consumableRebuffWarning? boolean
+---@field consumableRebuffThreshold? number
+---@field consumableRebuffColor? number[]
+---@field consumableDisplayMode? "icon_only"|"sub_icons"|"expanded"
 
 ---@class CategorySetting
 ---@field position CategoryPosition
@@ -157,6 +175,7 @@
 ---@field showText? boolean
 ---@field useCustomAppearance? boolean
 ---@field split? boolean
+---@field clickable? boolean
 ---@field priority? number
 
 --- All category settings must be defined here. When adding a new category:
@@ -176,11 +195,27 @@
 
 ---@alias SplitCategories table<CategoryName, boolean>
 
+---@class DungeonDifficulty
+---@field normal? boolean
+---@field heroic? boolean
+---@field mythic? boolean
+---@field mythicPlus? boolean
+---@field timewalking? boolean
+---@field follower? boolean
+
+---@class RaidDifficulty
+---@field lfr? boolean
+---@field normal? boolean
+---@field heroic? boolean
+---@field mythic? boolean
+
 ---@class ContentVisibility
 ---@field openWorld boolean
 ---@field dungeon boolean
 ---@field scenario boolean
 ---@field raid boolean
+---@field dungeonDifficulty? DungeonDifficulty
+---@field raidDifficulty? RaidDifficulty
 
 ---@alias CategoryVisibility table<CategoryName, ContentVisibility>
 
@@ -190,20 +225,15 @@
 ---@field sortOrder number                   -- Position within category for display ordering
 ---@field visible boolean                    -- Should show?
 ---@field displayType "count"|"missing"|"expiring"
----@field countText string?                  -- "17/20" for raid buffs
+---@field countText string?                  -- "17/20" for raid buffs, "5m" for expiring consumables
 ---@field missingText string?                -- "NO\nAURA" for non-raid
 ---@field expiringTime number?               -- Seconds remaining if expiring
 ---@field shouldGlow boolean                 -- Expiration glow?
 ---@field iconByRole table<RoleType,number>? -- Role-based icon override
----@field actionItems ActionItem[]?          -- Optional clickable consumable items to show when missing
----@field actionSpellID number?              -- Optional clickable spell ID to cast when missing
+---@field rebuffWarning boolean?             -- Consumable rebuff pulsing border?
+---@field isEating boolean?                 -- Food entry: player is currently eating
 
----@class ActionItem
----@field itemID number
----@field count number
----@field icon number?
-
----@class BuffRemindersV2DB
+---@class BuffRemindersDB
 ---@field dbVersion? integer
 
 -- ============================================================================
@@ -224,3 +254,11 @@
 ---@field width? number Optional explicit width override
 ---@field scrollbarOffset? number Offset to subtract from parent width (used when width not specified)
 ---@field onToggle? fun(expanded: boolean) Optional callback when toggled
+
+---@class ToggleConfig
+---@field label string
+---@field checked? boolean
+---@field get? fun(): boolean
+---@field enabled? fun(): boolean
+---@field onChange fun(checked: boolean)
+---@field tooltip? string|table

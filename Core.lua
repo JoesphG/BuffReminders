@@ -89,6 +89,7 @@ local CategorySettingKeys = {
     -- Toggles
     useCustomAppearance = nil, -- No refresh, just toggle state
     split = "FramesReparent",
+    clickable = nil, -- No auto-refresh, handled manually via UpdateClickOverlays
 }
 
 -- Defaults settings (path = defaults.{key})
@@ -106,8 +107,14 @@ local DefaultSettingKeys = {
     -- Behavior (glow is global-only, lives under defaults)
     showExpirationGlow = "VisualsRefresh",
     expirationThreshold = "VisualsRefresh",
-    rebuffTimeWarning = "DisplayRefresh",
     glowStyle = "VisualsRefresh",
+    -- Consumable rebuff warning
+    showConsumablesWithoutItems = "DisplayRefresh",
+    consumableRebuffWarning = "DisplayRefresh",
+    consumableRebuffThreshold = "DisplayRefresh",
+    consumableRebuffColor = "VisualsRefresh",
+    -- Consumable display mode
+    consumableDisplayMode = "DisplayRefresh",
     -- Font (global-only, lives under defaults)
     fontFace = "VisualsRefresh",
 }
@@ -208,6 +215,7 @@ local function ValidatePath(segments)
                 "showText",
                 "useCustomAppearance",
                 "split",
+                "clickable",
             }
             for _, key in ipairs(knownKeys) do
                 if setting == key then
@@ -260,7 +268,7 @@ local RefreshType = {
 ---@param path string Dot-separated path like "categorySettings.main.iconSize" or "enabledBuffs.intellect"
 ---@param value any The new value
 function BR.Config.Set(path, value)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if not db then
         return
     end
@@ -278,7 +286,7 @@ function BR.Config.Set(path, value)
     -- Validate path (debug mode only warns, doesn't block)
     local isValid, validatedRefreshType = ValidatePath(segments)
     if not isValid and BR.Config.DebugMode then
-        print("|cffff6600BuffRemindersV2:|r Invalid config path: " .. path)
+        print("|cffff6600BuffReminders:|r Invalid config path: " .. path)
     end
 
     -- Navigate to parent and get old value
@@ -325,7 +333,7 @@ end
 ---@param default? any Default value if not found
 ---@return any
 function BR.Config.Get(path, default)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if not db then
         return default
     end
@@ -347,7 +355,7 @@ end
 ---Set multiple config values at once (batched, single refresh)
 ---@param changes table<string, any> Map of path -> value
 function BR.Config.SetMulti(changes)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if not db then
         return
     end
@@ -365,7 +373,7 @@ function BR.Config.SetMulti(changes)
             -- Validate path (debug mode only warns, doesn't block)
             local isValid, validatedRefreshType = ValidatePath(segments)
             if not isValid and BR.Config.DebugMode then
-                print("|cffff6600BuffRemindersV2:|r Invalid config path: " .. path)
+                print("|cffff6600BuffReminders:|r Invalid config path: " .. path)
             end
 
             local parent = db
@@ -429,7 +437,7 @@ local AppearanceKeys = {
 ---@param key string Setting key (iconSize, showBuffReminder, etc.)
 ---@return any value The effective value for this setting
 function BR.Config.GetCategorySetting(category, key)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if not db then
         return nil
     end
@@ -462,7 +470,7 @@ end
 ---@param category string
 ---@return boolean
 function BR.Config.HasCustomAppearance(category)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if not db or not db.categorySettings or not db.categorySettings[category] then
         return false
     end

@@ -1,7 +1,5 @@
 local _, BR = ...
 
-BR.ConsumableState = BR.ConsumableState or {}
-
 -- ============================================================================
 -- BUFF STATE MODULE
 -- ============================================================================
@@ -19,6 +17,7 @@ local TargetedBuffs = BUFF_TABLES.targeted
 local SelfBuffs = BUFF_TABLES.self
 local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
+local CustomBuffs = BUFF_TABLES.custom
 
 -- ============================================================================
 -- MODULE STATE
@@ -44,6 +43,25 @@ local inReadyCheck = false
 
 -- Content type cache (invalidated on PLAYER_ENTERING_WORLD)
 local cachedContentType = nil
+
+-- Difficulty cache (invalidated alongside content type)
+local cachedDifficultyKey = nil
+
+local DUNGEON_DIFFICULTY_KEYS = {
+    [1] = "normal", -- Normal
+    [2] = "heroic", -- Heroic
+    [23] = "mythic", -- Mythic
+    [8] = "mythicPlus", -- Mythic Keystone
+    [24] = "timewalking", -- Timewalking
+    [205] = "follower", -- Follower Dungeon
+}
+
+local RAID_DIFFICULTY_KEYS = {
+    [17] = "lfr", -- Looking for Raid
+    [14] = "normal", -- Normal
+    [15] = "heroic", -- Heroic
+    [16] = "mythic", -- Mythic
+}
 
 -- Talent/spell knowledge cache (invalidated on PLAYER_SPECIALIZATION_CHANGED)
 local cachedSpellKnowledge = {}
@@ -96,79 +114,6 @@ end
 -- ============================================================================
 -- UTILITY FUNCTIONS
 -- ============================================================================
-
----Get item icon safely
----@param itemID number
----@return number?
-local function GetItemIconSafe(itemID)
-    if C_Item and C_Item.GetItemIconByID then
-        return C_Item.GetItemIconByID(itemID)
-    end
-    if GetItemIcon then
-        return GetItemIcon(itemID)
-    end
-    return nil
-end
-
----Get item count safely
----@param itemID number
----@return number
-local function GetItemCountSafe(itemID)
-    local ok, count = pcall(C_Item.GetItemCount, itemID, false, true)
-    if ok and count then
-        return count
-    end
-    if GetItemCount then
-        return GetItemCount(itemID, false) or 0
-    end
-    return 0
-end
-
----Resolve a castable spell ID for the player
----@param spellIDs SpellID
----@return number?
-local function GetCastableSpellID(spellIDs)
-    if not spellIDs then
-        return nil
-    end
-    local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
-    for _, id in ipairs(spellList) do
-        if IsPlayerSpellCached(id) then
-            return id
-        end
-    end
-    return nil
-end
-
----Check if player can cast the buff (class/spec/talent)
----@param buff table
----@return number? spellID
-local function GetActionSpellIDForBuff(buff)
-    if not buff then
-        return nil
-    end
-    if buff.excludeTalentSpellID and IsPlayerSpellCached(buff.excludeTalentSpellID) then
-        return nil
-    end
-    if buff.requiresTalentSpellID and not IsPlayerSpellCached(buff.requiresTalentSpellID) then
-        return nil
-    end
-    if buff.requireSpecId and GetPlayerSpecId() ~= buff.requireSpecId then
-        return nil
-    end
-    local castable = GetCastableSpellID(buff.spellID)
-    if castable then
-        return castable
-    end
-    -- Fallback: if this is the player's class, use the first spellID so the icon stays clickable.
-    if buff.class and buff.class == playerClass and buff.spellID then
-        if type(buff.spellID) == "table" then
-            return buff.spellID[1]
-        end
-        return buff.spellID
-    end
-    return nil
-end
 
 ---Check if a unit is a valid group member for buff tracking
 ---Excludes: non-existent, dead/ghost, disconnected, hostile (cross-faction in open world)
@@ -337,7 +282,7 @@ end
 ---@param key string
 ---@return boolean
 local function IsBuffEnabled(key)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     return db.enabledBuffs[key] ~= false
 end
 
@@ -362,15 +307,37 @@ local function GetCurrentContentType()
     return cachedContentType
 end
 
+---Get the current difficulty key (cached)
+---Only caches valid keys; returns nil (retried next call) if the API returns
+---an unmapped difficultyID (e.g. 0 during a loading transition).
+---@return string? difficultyKey or nil if not in a dungeon/raid or unknown difficulty
+local function GetCurrentDifficultyKey()
+    if cachedDifficultyKey ~= nil then
+        return cachedDifficultyKey
+    end
+    local difficultyID = select(3, GetInstanceInfo())
+    local contentType = GetCurrentContentType()
+    if contentType == "dungeon" then
+        local key = DUNGEON_DIFFICULTY_KEYS[difficultyID]
+        if key then
+            cachedDifficultyKey = key
+        end
+        return key
+    elseif contentType == "raid" then
+        local key = RAID_DIFFICULTY_KEYS[difficultyID]
+        if key then
+            cachedDifficultyKey = key
+        end
+        return key
+    end
+    return nil
+end
+
 ---Check if a category should be visible for the current content type
 ---@param category CategoryName
 ---@return boolean
 local function IsCategoryVisibleForContent(category)
-    local db = BuffRemindersV2DB
-    local inInstance, instanceType = IsInInstance()
-    if not inInstance or (instanceType ~= "raid" and instanceType ~= "party") then
-        return false
-    end
+    local db = BuffRemindersDB
     if not db.categoryVisibility then
         return true
     end
@@ -379,7 +346,19 @@ local function IsCategoryVisibleForContent(category)
         return true
     end
     local contentType = GetCurrentContentType()
-    return visibility[contentType] ~= false
+    if visibility[contentType] == false then
+        return false
+    end
+    -- Check difficulty sub-filter
+    local diffKey = GetCurrentDifficultyKey()
+    if diffKey then
+        if contentType == "dungeon" and visibility.dungeonDifficulty then
+            return visibility.dungeonDifficulty[diffKey] ~= false
+        elseif contentType == "raid" and visibility.raidDifficulty then
+            return visibility.raidDifficulty[diffKey] ~= false
+        end
+    end
+    return true
 end
 
 -- ============================================================================
@@ -510,6 +489,10 @@ local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, 
     return not IsPlayerBuffActive(spellID, beneficiaryRole)
 end
 
+-- Categories where the "player knows this spell" check should be skipped.
+-- Custom buffs track buffs the user *receives*, not necessarily casts.
+local SKIP_SPELL_KNOWN_CATEGORIES = { custom = true }
+
 ---Check if player should cast their self buff or weapon imbue (returns true if missing)
 ---@param spellID SpellID
 ---@param requiredClass ClassName
@@ -519,6 +502,7 @@ end
 ---@param buffIdOverride? number Separate buff ID to check (if different from spellID)
 ---@param customCheck? fun(): boolean? Custom check function for complex buff logic
 ---@param requireSpecId? number Only show if player's current spec matches (WoW spec ID)
+---@param skipSpellKnownCheck? boolean Skip the "player knows spell" check (for custom buffs)
 ---@return boolean? Returns nil if player can't/shouldn't use this buff
 local function ShouldShowSelfBuff(
     spellID,
@@ -528,7 +512,8 @@ local function ShouldShowSelfBuff(
     excludeTalent,
     buffIdOverride,
     customCheck,
-    requireSpecId
+    requireSpecId,
+    skipSpellKnownCheck
 )
     if requiredClass and playerClass ~= requiredClass then
         return nil
@@ -551,22 +536,25 @@ local function ShouldShowSelfBuff(
     end
 
     -- For buffs with multiple spellIDs (like shields), check if player knows ANY of them
-    ---@type number[]
-    local spellIDs
-    if type(spellID) == "table" then
-        spellIDs = spellID
-    else
-        spellIDs = { spellID }
-    end
-    local knowsAnySpell = false
-    for _, id in ipairs(spellIDs) do
-        if IsPlayerSpellCached(id) then
-            knowsAnySpell = true
-            break
+    -- Skip for custom buffs (they track received buffs, not cast buffs)
+    if not skipSpellKnownCheck then
+        ---@type number[]
+        local spellIDs
+        if type(spellID) == "table" then
+            spellIDs = spellID
+        else
+            spellIDs = { spellID }
         end
-    end
-    if not knowsAnySpell then
-        return nil
+        local knowsAnySpell = false
+        for _, id in ipairs(spellIDs) do
+            if IsPlayerSpellCached(id) then
+                knowsAnySpell = true
+                break
+            end
+        end
+        if not knowsAnySpell then
+            return nil
+        end
     end
 
     -- Weapon imbue: check if this specific enchant is on either weapon
@@ -579,49 +567,57 @@ local function ShouldShowSelfBuff(
     return not hasBuff
 end
 
-local function GetConsumableRemaining(spellIDs, buffIconID, checkWeaponEnchant)
-    if spellIDs then
-        local hasBuff, remaining = UnitHasBuff("player", spellIDs)
-        if hasBuff then
-            return remaining
-        end
-    end
+-- Icon ID for the eating channel aura (consistent across all food types)
+-- Shared via BR namespace: also used by BuffReminders.lua for the display icon
+BR.EATING_AURA_ICON = 133950
+local EATING_AURA_ICON = BR.EATING_AURA_ICON
 
-    if buffIconID then
-        local minRemaining
-        for i = 1, 40 do
-            local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-            if not auraData then
+-- Event-driven eating state: tracked via UNIT_AURA payload, no per-render scanning.
+local eatingAuraInstanceID = nil
+
+---Check if the player is currently eating (reads cached flag, O(1))
+---@return boolean
+local function IsPlayerEating()
+    return eatingAuraInstanceID ~= nil
+end
+
+---Full aura scan to seed eating state (call once on init / reload)
+local function ScanEatingState()
+    eatingAuraInstanceID = nil
+    local i = 1
+    local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+    while auraData do
+        if auraData.icon == EATING_AURA_ICON then
+            eatingAuraInstanceID = auraData.auraInstanceID
+            return
+        end
+        i = i + 1
+        auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+    end
+end
+
+---Update eating state from UNIT_AURA payload (called on every player UNIT_AURA)
+---@param updateInfo table? The updateInfo payload from UNIT_AURA
+local function UpdateEatingState(updateInfo)
+    if not updateInfo then
+        return
+    end
+    if updateInfo.addedAuras then
+        for _, aura in ipairs(updateInfo.addedAuras) do
+            if aura.icon == EATING_AURA_ICON then
+                eatingAuraInstanceID = aura.auraInstanceID
                 break
             end
-            local success, iconMatches = pcall(function()
-                return auraData.icon == buffIconID
-            end)
-            if success and iconMatches and auraData.expirationTime and auraData.expirationTime > 0 then
-                local remaining = auraData.expirationTime - GetTime()
-                if remaining and (not minRemaining or remaining < minRemaining) then
-                    minRemaining = remaining
-                end
+        end
+    end
+    if updateInfo.removedAuraInstanceIDs and eatingAuraInstanceID then
+        for _, id in ipairs(updateInfo.removedAuraInstanceIDs) do
+            if id == eatingAuraInstanceID then
+                eatingAuraInstanceID = nil
+                break
             end
         end
-        return minRemaining
     end
-
-    if checkWeaponEnchant then
-        local remaining
-        if currentWeaponEnchants.hasMainHand and currentWeaponEnchants.mainHandExpiration and currentWeaponEnchants.mainHandExpiration > 0 then
-            remaining = currentWeaponEnchants.mainHandExpiration / 1000
-        end
-        if currentWeaponEnchants.hasOffHand and currentWeaponEnchants.offHandExpiration and currentWeaponEnchants.offHandExpiration > 0 then
-            local offRemaining = currentWeaponEnchants.offHandExpiration / 1000
-            if not remaining or offRemaining < remaining then
-                remaining = offRemaining
-            end
-        end
-        return remaining
-    end
-
-    return nil
 end
 
 ---Check if player is missing a consumable buff, weapon enchant, or inventory item (returns true if missing)
@@ -629,49 +625,47 @@ end
 ---@param buffIconID? number
 ---@param checkWeaponEnchant? boolean
 ---@param itemID? number|number[]
----@return boolean
-local function ShouldShowConsumableBuff(buffKey, spellIDs, buffIconID, checkWeaponEnchant, itemID)
+---@return boolean shouldShow
+---@return number? remainingTime seconds remaining if buff is present and has a duration
+local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant, itemID)
     -- Check buff auras by spell ID
     if spellIDs then
         local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
         for _, id in ipairs(spellList) do
-            local hasBuff, _ = UnitHasBuff("player", id)
+            local hasBuff, remaining = UnitHasBuff("player", id)
             if hasBuff then
-                return false -- Has at least one of the consumable buffs
+                return false, remaining -- Has at least one of the consumable buffs
             end
         end
     end
 
     -- Check buff auras by icon ID (e.g., food buffs all use icon 136000)
-    local ignoreBuffIcon = false
-    if buffKey == "food" then
-        local state = BR.ConsumableState
-        if state and state.foodEatingUntil and state.foodEatingUntil > GetTime() then
-            ignoreBuffIcon = true
-        end
-    end
-
     if buffIconID then
-        for i = 1, 40 do
-            local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-            if not auraData then
-                break
-            end
+        local i = 1
+        local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+        while auraData do
             local success, iconMatches = pcall(function()
                 return auraData.icon == buffIconID
             end)
             if success and iconMatches then
-                if not ignoreBuffIcon then
-                    return false -- Has a buff with this icon
+                local remaining = nil
+                if auraData.expirationTime and auraData.expirationTime > 0 then
+                    remaining = auraData.expirationTime - GetTime()
                 end
+                return false, remaining -- Has a buff with this icon
             end
+            i = i + 1
+            auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
         end
     end
 
     -- Check if any weapon enchant exists (oils, stones, shaman imbues, etc.)
     if checkWeaponEnchant then
         if currentWeaponEnchants.hasMainHand then
-            return false -- Has a weapon enchant
+            -- GetWeaponEnchantInfo returns: hasMainHand, mainExpiration, mainCharges, mainEnchantID, ...
+            local _, mainExpiration = GetWeaponEnchantInfo()
+            local remaining = mainExpiration and (mainExpiration / 1000) or nil
+            return false, remaining -- Has a weapon enchant
         end
     end
 
@@ -681,77 +675,17 @@ local function ShouldShowConsumableBuff(buffKey, spellIDs, buffIconID, checkWeap
         for _, id in ipairs(itemList) do
             local ok, count = pcall(C_Item.GetItemCount, id, false, true)
             if ok and count and count > 0 then
-                return false -- Has the item in inventory
+                return false, nil -- Has the item in inventory
             end
         end
     end
 
     -- If we have nothing to check, return false
     if not spellIDs and not buffIconID and not checkWeaponEnchant and not itemID then
-        return false
+        return false, nil
     end
 
-    return true -- Missing all consumable buffs/enchants/items
-end
-
----Collect clickable consumable items for missing buffs (flask/food only)
----@param buff table
----@return ActionItem[]?
-local function CollectConsumableActionItems(buff)
-    if not buff or (buff.key ~= "flask" and buff.key ~= "food" and buff.key ~= "weaponBuff" and buff.key ~= "rune") then
-        return nil
-    end
-    if not C_Container or not C_Container.GetContainerNumSlots then
-        return nil
-    end
-    local itemSets = BR.CONSUMABLE_ITEMS or {}
-    local allowedSet
-    if buff.key == "flask" then
-        allowedSet = itemSets.flask
-    elseif buff.key == "food" then
-        allowedSet = itemSets.food
-    elseif buff.key == "rune" then
-        allowedSet = itemSets.rune
-    else
-        allowedSet = itemSets.weapon
-    end
-    if not allowedSet then
-        return nil
-    end
-
-    local items = {}
-    local seen = {}
-    local maxBags = NUM_BAG_SLOTS or 4
-    for bag = 0, maxBags do
-        local slots = C_Container.GetContainerNumSlots(bag)
-        for slot = 1, slots do
-            local itemID = C_Container.GetContainerItemID(bag, slot)
-            if itemID and not seen[itemID] then
-                seen[itemID] = true
-                if allowedSet[itemID] then
-                    local count = GetItemCountSafe(itemID)
-                    if count > 0 then
-                        items[#items + 1] = {
-                            itemID = itemID,
-                            count = count,
-                            icon = GetItemIconSafe(itemID),
-                        }
-                    end
-                end
-            end
-        end
-    end
-
-    if #items == 0 then
-        return nil
-    end
-    table.sort(items, function(a, b)
-        if a.count == b.count then
-            return a.itemID < b.itemID
-        end
-        return a.count > b.count
-    end)
-    return items
+    return true, nil -- Missing all consumable buffs/enchants/items
 end
 
 ---Check if buff passes common pre-conditions
@@ -760,6 +694,11 @@ end
 ---@param db table Database settings
 ---@return boolean passes
 local function PassesPreChecks(buff, presentClasses, db)
+    -- Custom visibility condition
+    if buff.visibilityCondition and not buff.visibilityCondition() then
+        return false
+    end
+
     -- Ready check only
     local readyCheckOnly = buff.readyCheckOnly or (buff.infoTooltip and buff.infoTooltip:match("^Ready Check Only"))
     if readyCheckOnly and not inReadyCheck then
@@ -830,7 +769,7 @@ end
 
 ---Recompute all buff states
 function BuffState.Refresh()
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if not db then
         return
     end
@@ -842,29 +781,25 @@ function BuffState.Refresh()
         entry.countText = nil
         entry.missingText = nil
         entry.expiringTime = nil
-        entry.actionItems = nil
-        entry.actionSpellID = nil
         entry.rebuffWarning = nil
+        entry.isEating = nil
     end
 
     -- Build valid unit cache once per refresh cycle
     BuildValidUnitCache()
 
     -- Fetch weapon enchant info once per refresh cycle
-    local hasMain, mainExp, _, mainID, hasOff, offExp, _, offID = GetWeaponEnchantInfo()
+    local hasMain, _, _, mainID, hasOff, _, _, offID = GetWeaponEnchantInfo()
     currentWeaponEnchants.hasMainHand = hasMain or false
     currentWeaponEnchants.mainHandID = mainID
-    currentWeaponEnchants.mainHandExpiration = mainExp or 0
     currentWeaponEnchants.hasOffHand = hasOff or false
     currentWeaponEnchants.offHandID = offID
-    currentWeaponEnchants.offHandExpiration = offExp or 0
 
     local playerOnly = db.showOnlyPlayerMissing
     -- TODO: make glow truly global — currently only raid/presence buffs track time remaining,
     -- so targeted/self/consumable/custom buffs never glow. Add expiration tracking to all categories.
     local glowDefaults = db.defaults or {}
     local expirationThreshold = (glowDefaults.expirationThreshold or 15) * 60
-    local rebuffTimeWarning = (glowDefaults.rebuffTimeWarning or 30) * 60
     local showExpirationGlow = glowDefaults.showExpirationGlow ~= false
 
     -- Process raid buffs (coverage - need everyone to have them)
@@ -887,17 +822,12 @@ function BuffState.Refresh()
                 if expiringSoon and minRemaining then
                     entry.expiringTime = minRemaining
                 end
-                entry.actionSpellID = GetActionSpellIDForBuff(buff)
-            elseif minRemaining and minRemaining < rebuffTimeWarning then
+            elseif expiringSoon and minRemaining then
                 entry.visible = true
-                entry.displayType = "count"
+                entry.displayType = "expiring"
+                entry.expiringTime = minRemaining
                 entry.countText = FormatRemainingTime(minRemaining)
-                entry.rebuffWarning = true
-                entry.shouldGlow = expiringSoon or false
-                if expiringSoon then
-                    entry.expiringTime = minRemaining
-                end
-                entry.actionSpellID = GetActionSpellIDForBuff(buff)
+                entry.shouldGlow = true
             end
         end
     end
@@ -924,17 +854,12 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
-                entry.actionSpellID = GetActionSpellIDForBuff(buff)
-            elseif minRemaining and minRemaining < rebuffTimeWarning then
+            elseif expiringSoon and minRemaining then
                 entry.visible = true
-                entry.displayType = "count"
+                entry.displayType = "expiring"
+                entry.expiringTime = minRemaining
                 entry.countText = FormatRemainingTime(minRemaining)
-                entry.rebuffWarning = true
-                entry.shouldGlow = expiringSoon or false
-                if expiringSoon then
-                    entry.expiringTime = minRemaining
-                end
-                entry.actionSpellID = GetActionSpellIDForBuff(buff)
+                entry.shouldGlow = true
             end
         end
     end
@@ -952,7 +877,6 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
-                entry.actionSpellID = GetActionSpellIDForBuff(buff)
             end
         end
     end
@@ -979,21 +903,21 @@ function BuffState.Refresh()
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
                 entry.iconByRole = buff.iconByRole
-                entry.actionSpellID = GetActionSpellIDForBuff(buff)
             end
         end
     end
 
     -- Process pet buffs (pet summon reminders)
     local petVisible = IsCategoryVisibleForContent("pet")
-    if BuffRemindersV2DB.hidePetWhileMounted ~= false and IsMounted() then
+    if BuffRemindersDB.hidePetWhileMounted ~= false and IsMounted() then
         petVisible = false
     end
+    local petPassiveHidden = BuffRemindersDB.petPassiveOnlyInCombat and not UnitAffectingCombat("player")
     for i, buff in ipairs(PetBuffs) do
         local entry = GetOrCreateEntry(buff.key, "pet", i)
         local settingKey = buff.groupId or buff.key
 
-        if IsBuffEnabled(settingKey) and petVisible then
+        if IsBuffEnabled(settingKey) and petVisible and not (buff.key == "petPassive" and petPassiveHidden) then
             local shouldShow = ShouldShowSelfBuff(
                 buff.spellID,
                 buff.class,
@@ -1015,58 +939,60 @@ function BuffState.Refresh()
 
     -- Process consumable buffs
     local consumableVisible = IsCategoryVisibleForContent("consumable")
+    local rebuffWarning = (db.defaults and db.defaults.consumableRebuffWarning) ~= false
+    local rebuffThreshold = ((db.defaults and db.defaults.consumableRebuffThreshold) or 10) * 60
     for i, buff in ipairs(Consumables) do
         local entry = GetOrCreateEntry(buff.key, "consumable", i)
         local settingKey = buff.groupId or buff.key
 
         local hasCaster = not buff.class or HasCasterForBuff(buff.class, buff.levelRequired)
         if IsBuffEnabled(settingKey) and consumableVisible and hasCaster and PassesPreChecks(buff, nil, db) then
-            local remaining = GetConsumableRemaining(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant)
-            local shouldShow = ShouldShowConsumableBuff(
-                buff.key,
-                buff.spellID,
-                buff.buffIconID,
-                buff.checkWeaponEnchant,
-                buff.itemID
-            )
+            local shouldShow, remainingTime =
+                ShouldShowConsumableBuff(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant, buff.itemID)
             if shouldShow then
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
-                entry.actionItems = CollectConsumableActionItems(buff)
-            elseif remaining and remaining < rebuffTimeWarning then
+            elseif rebuffWarning and remainingTime and remainingTime < rebuffThreshold then
+                -- Consumable is present but expiring soon
                 entry.visible = true
-                entry.displayType = "count"
-                entry.countText = FormatRemainingTime(remaining)
+                entry.displayType = "expiring"
+                entry.expiringTime = remainingTime
+                entry.countText = FormatRemainingTime(remainingTime)
                 entry.rebuffWarning = true
-                entry.actionItems = CollectConsumableActionItems(buff)
+            end
+            -- Eating state for food entries (display uses this for icon override)
+            if entry.visible and buff.key == "food" then
+                entry.isEating = IsPlayerEating()
             end
         end
     end
 
-    -- Process custom buffs
+    -- Process custom buffs (user-defined, flows through ShouldShowSelfBuff like self/pet)
     local customVisible = IsCategoryVisibleForContent("custom")
-    if db.customBuffs then
-        -- Sort keys for stable ordering (pairs() has no guaranteed order)
-        local sortedKeys = {}
-        for k in pairs(db.customBuffs) do
-            sortedKeys[#sortedKeys + 1] = k
-        end
-        table.sort(sortedKeys)
+    local skipSpellKnown = SKIP_SPELL_KNOWN_CATEGORIES["custom"]
+    for i, buff in ipairs(CustomBuffs) do
+        local entry = GetOrCreateEntry(buff.key, "custom", i)
+        local settingKey = buff.groupId or buff.key
 
-        for i, k in ipairs(sortedKeys) do
-            local customBuff = db.customBuffs[k]
-            local entry = GetOrCreateEntry(customBuff.key, "custom", i)
-            local classMatch = not customBuff.class or customBuff.class == playerClass
-            local specMatch = not customBuff.specId or customBuff.specId == GetPlayerSpecId()
-
-            if IsBuffEnabled(customBuff.key) and customVisible and classMatch and specMatch then
-                local hasBuff = UnitHasBuff("player", customBuff.spellID)
-                if not hasBuff then
-                    entry.visible = true
-                    entry.displayType = "missing"
-                    entry.missingText = customBuff.missingText
-                end
+        if IsBuffEnabled(settingKey) and customVisible then
+            local shouldShow = ShouldShowSelfBuff(
+                buff.spellID,
+                buff.class,
+                buff.enchantID,
+                buff.requiresTalentSpellID,
+                buff.excludeTalentSpellID,
+                buff.buffIdOverride,
+                buff.customCheck,
+                buff.requireSpecId,
+                skipSpellKnown
+            )
+            local wantPresent = buff.showWhenPresent
+            local show = (wantPresent and shouldShow == false) or (not wantPresent and shouldShow)
+            if show then
+                entry.visible = true
+                entry.displayType = "missing"
+                entry.missingText = buff.missingText
             end
         end
     end
@@ -1114,6 +1040,7 @@ end
 ---Invalidate content type cache (call on PLAYER_ENTERING_WORLD)
 function BuffState.InvalidateContentTypeCache()
     cachedContentType = nil
+    cachedDifficultyKey = nil
 end
 
 ---Invalidate spec ID cache (call on PLAYER_ENTERING_WORLD, PLAYER_SPECIALIZATION_CHANGED)
@@ -1135,6 +1062,9 @@ BR.StateHelpers = {
     IterateGroupMembers = IterateGroupMembers,
     IsValidGroupMember = IsValidGroupMember,
     FormatRemainingTime = FormatRemainingTime,
+    IsPlayerEating = IsPlayerEating,
+    UpdateEatingState = UpdateEatingState,
+    ScanEatingState = ScanEatingState,
     GetCurrentContentType = GetCurrentContentType,
     IsCategoryVisibleForContent = IsCategoryVisibleForContent,
     GetBuffSettingKey = GetBuffSettingKey,

@@ -9,7 +9,7 @@ local LSM = LibStub("LibSharedMedia-3.0")
 
 -- Masque integration (optional)
 local Masque = LibStub("Masque", true)
-local masqueGroup = Masque and Masque:Group("BuffRemindersV2")
+local masqueGroup = Masque and Masque:Group("BuffReminders")
 
 local function IsMasqueActive()
     return masqueGroup ~= nil and not masqueGroup.db.Disabled
@@ -21,7 +21,7 @@ local fontPath = STANDARD_TEXT_FONT
 
 ---Resolve the font path from saved settings and update the cache
 local function ResolveFontPath()
-    local fontName = BuffRemindersV2DB and BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.fontFace
+    local fontName = BuffRemindersDB and BuffRemindersDB.defaults and BuffRemindersDB.defaults.fontFace
     if fontName then
         local path = LSM:Fetch("font", fontName)
         if path then
@@ -33,8 +33,8 @@ local function ResolveFontPath()
 end
 
 -- Global API table for external addon integration
-BuffRemindersV2 = {}
-local EXPORT_PREFIX = "!BRV2_"
+BuffReminders = {}
+local EXPORT_PREFIX = "!BR_"
 
 -- Buff tables from Buffs.lua (via BR namespace)
 local BUFF_TABLES = BR.BUFF_TABLES
@@ -46,6 +46,7 @@ local TargetedBuffs = BUFF_TABLES.targeted
 local SelfBuffs = BUFF_TABLES.self
 local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
+local CustomBuffs = BUFF_TABLES.custom
 
 -- Build icon override lookup table (for spells replaced by talents)
 local IconOverrides = {} ---@type table<number, number>
@@ -89,6 +90,23 @@ local function ValidateSpellID(spellID)
     return name ~= nil, name, iconID
 end
 
+---Rebuild BUFF_TABLES.custom from db.customBuffs (preserves table identity via wipe)
+local function BuildCustomBuffArray()
+    local db = BuffRemindersDB
+    wipe(CustomBuffs)
+    if not db or not db.customBuffs then
+        return
+    end
+    local sortedKeys = {}
+    for k in pairs(db.customBuffs) do
+        sortedKeys[#sortedKeys + 1] = k
+    end
+    table.sort(sortedKeys)
+    for _, k in ipairs(sortedKeys) do
+        CustomBuffs[#CustomBuffs + 1] = db.customBuffs[k]
+    end
+end
+
 -- Get helpers from State.lua
 local GetBuffSettingKey = function(buff)
     return BR.StateHelpers.GetBuffSettingKey(buff)
@@ -97,21 +115,20 @@ local IsBuffEnabled = function(key)
     return BR.StateHelpers.IsBuffEnabled(key)
 end
 
-local function UseConsumableItemIcons()
-    local cs = BuffRemindersV2DB.categorySettings and BuffRemindersV2DB.categorySettings.consumable
-    return not cs or cs.useItemIcons ~= false
-end
-
 -- Default settings
 -- Note: enabledBuffs defaults to all enabled - only set false to disable by default
 local defaults = {
     locked = true,
-    enabledBuffs = {},
+    enabledBuffs = {
+        delveFood = false,
+        burningRush = false,
+    },
     showOnlyInGroup = false,
     showOnlyPlayerClassBuff = false,
     showOnlyPlayerMissing = false,
     showOnlyOnReadyCheck = false,
     hidePetWhileMounted = true,
+    petPassiveOnlyInCombat = false,
     readyCheckDuration = 15, -- seconds
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
     showLoginMessages = true,
@@ -133,7 +150,12 @@ local defaults = {
         showExpirationGlow = true,
         expirationThreshold = 15, -- minutes
         glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
-        rebuffTimeWarning = 30, -- minutes (show time + border when below this)
+        -- Consumable rebuff warning
+        showConsumablesWithoutItems = false,
+        consumableRebuffWarning = true,
+        consumableRebuffThreshold = 10, -- minutes
+        consumableRebuffColor = { 1, 0.5, 0 },
+        consumableDisplayMode = "sub_icons",
     },
 
     ---@type CategoryVisibility
@@ -143,7 +165,26 @@ local defaults = {
         targeted = { openWorld = false, dungeon = true, scenario = true, raid = true },
         self = { openWorld = true, dungeon = true, scenario = true, raid = true },
         pet = { openWorld = true, dungeon = true, scenario = true, raid = true },
-        consumable = { openWorld = false, dungeon = true, scenario = true, raid = true },
+        consumable = {
+            openWorld = false,
+            dungeon = true,
+            scenario = true,
+            raid = true,
+            dungeonDifficulty = {
+                normal = false,
+                heroic = false,
+                mythic = true,
+                mythicPlus = false,
+                timewalking = false,
+                follower = false,
+            },
+            raidDifficulty = {
+                lfr = false,
+                normal = true,
+                heroic = true,
+                mythic = true,
+            },
+        },
         custom = { openWorld = true, dungeon = true, scenario = true, raid = true },
     },
 
@@ -158,43 +199,49 @@ local defaults = {
             useCustomAppearance = false,
             showBuffReminder = true,
             split = false,
+            clickable = false,
             priority = 1,
         },
         presence = {
             position = { point = "CENTER", x = 0, y = 20 },
             useCustomAppearance = false,
             split = false,
+            clickable = false,
             priority = 2,
         },
         targeted = {
             position = { point = "CENTER", x = 0, y = -20 },
             useCustomAppearance = false,
             split = false,
+            clickable = false,
             priority = 3,
         },
         self = {
             position = { point = "CENTER", x = 0, y = -60 },
             useCustomAppearance = false,
             split = false,
+            clickable = false,
             priority = 4,
         },
         pet = {
             position = { point = "CENTER", x = 0, y = -100 },
             useCustomAppearance = false,
             split = false,
+            clickable = false,
             priority = 5,
         },
         consumable = {
             position = { point = "CENTER", x = 0, y = -140 },
             useCustomAppearance = false,
             split = false,
+            clickable = false,
             priority = 6,
-            useItemIcons = true,
         },
         custom = {
             position = { point = "CENTER", x = 0, y = -180 },
             useCustomAppearance = false,
             split = false,
+            clickable = false,
             priority = 7,
         },
     },
@@ -206,7 +253,6 @@ local MISSING_TEXT_SCALE = 0.6 -- scale for "NO X" warning text
 -- Locals
 local mainFrame
 local buffFrames = {}
-local consumableItemFrames = {}
 local updateTicker
 local readyCheckTimer = nil
 local testMode = false
@@ -221,6 +267,7 @@ local lastAuraUpdate = 0
 
 -- Track combat state via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
 local inCombat = false
+local isResting = false
 
 -- Category frame system
 local categoryFrames = {}
@@ -244,7 +291,7 @@ BR.CATEGORIES = CATEGORIES
 ---@param category string
 ---@return boolean
 local function IsCategorySplit(category)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     -- Check new location first (categorySettings.{cat}.split)
     if db.categorySettings and db.categorySettings[category] then
         if db.categorySettings[category].split ~= nil then
@@ -271,7 +318,7 @@ end
 ---@param category string
 ---@return table A table with all effective settings for this category
 local function GetCategorySettings(category)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     local catSettings = db.categorySettings and db.categorySettings[category]
     local globalDefaults = db.defaults or defaults.defaults
 
@@ -369,7 +416,7 @@ local function ShouldShowText(category)
     if not category then
         return true
     end
-    local cs = BuffRemindersV2DB.categorySettings and BuffRemindersV2DB.categorySettings[category]
+    local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[category]
     return not cs or cs.showText ~= false
 end
 
@@ -449,13 +496,32 @@ end
 -- Action bar button names to scan for glows
 -- Reverse lookup: spellID → buff entry (for glow fallback detection across all categories)
 local glowSpellToBuff = {}
+
+--- Register a buff's spellID(s) in the glow fallback lookup table
+local function RegisterGlowBuff(buff, catName)
+    local ids = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
+    for _, id in ipairs(ids) do
+        if id and id ~= 0 then
+            glowSpellToBuff[id] = { buff = buff, category = catName }
+        end
+    end
+end
+
+--- Unregister spellID(s) from the glow fallback lookup table
+---@param spellID number|number[] Single spell ID or table of spell IDs
+local function UnregisterGlowSpell(spellID)
+    local ids = type(spellID) == "table" and spellID or { spellID }
+    for _, id in ipairs(ids) do
+        if id then
+            glowSpellToBuff[id] = nil
+        end
+    end
+end
+
 for catName, category in pairs(BUFF_TABLES) do
     for _, buff in ipairs(category) do
         if not buff.enchantID and not buff.customCheck then
-            local ids = type(buff.spellID) == "table" and buff.spellID or { buff.spellID }
-            for _, id in ipairs(ids) do
-                glowSpellToBuff[id] = { buff = buff, category = catName }
-            end
+            RegisterGlowBuff(buff, catName)
         end
     end
 end
@@ -467,7 +533,7 @@ local function SeedGlowingSpells()
         return
     end
     for spellID, entry in pairs(glowSpellToBuff) do
-        if entry.buff.class == playerClass and IsSpellOverlayed(spellID) then
+        if (not entry.buff.class or entry.buff.class == playerClass) and IsSpellOverlayed(spellID) then
             glowingSpells[spellID] = true
         end
     end
@@ -574,7 +640,7 @@ BR.GlowStyles = GlowStyles
 
 -- Show/hide expiration glow on a buff frame
 local function SetExpirationGlow(frame, show)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     local styleIndex = (db.defaults and db.defaults.glowStyle) or 1
 
     if show then
@@ -617,65 +683,17 @@ local function SetExpirationGlow(frame, show)
     end
 end
 
-local REBUFF_BORDER_ATLAS = "UI-Frame-DottedBorder"
-local REBUFF_BORDER_TEXTURE = "Interface\\Common\\UI-Frame-DottedBorder"
-local REBUFF_BORDER_FALLBACK = "Interface\\Buttons\\UI-ActionButton-Border"
-local REBUFF_BORDER_OUTSET = 18
+-- Forward declaration for SetRebuffBorder (defined after glow styles)
+local SetRebuffBorder
 
-local function SetRebuffBorder(frame, show)
-    if show then
-        if not frame.rebuffBorder then
-            local border = frame:CreateTexture(nil, "OVERLAY")
-            border:SetDrawLayer("OVERLAY", 7)
-            border:SetPoint("TOPLEFT", -REBUFF_BORDER_OUTSET, REBUFF_BORDER_OUTSET)
-            border:SetPoint("BOTTOMRIGHT", REBUFF_BORDER_OUTSET, -REBUFF_BORDER_OUTSET)
-            if border.SetAtlas then
-                pcall(border.SetAtlas, border, REBUFF_BORDER_ATLAS, true)
-            end
-            border:SetTexture(REBUFF_BORDER_TEXTURE)
-            if not border:GetTexture() then
-                border:SetTexture(REBUFF_BORDER_FALLBACK)
-            end
-            border:SetTexCoord(0.06, 0.94, 0.06, 0.94)
-            border:SetBlendMode("ADD")
-            border:SetAlpha(0.9)
-            frame.rebuffBorder = border
-
-            local ag = border:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(0.9)
-            fade:SetToAlpha(0.3)
-            fade:SetDuration(0.6)
-            fade:SetSmoothing("IN_OUT")
-            frame.rebuffBorderAnim = ag
-        end
-        frame.rebuffBorder:SetDrawLayer("OVERLAY", 7)
-        frame.rebuffBorder:Show()
-        if frame.rebuffBorderAnim then
-            frame.rebuffBorderAnim:Play()
-        end
-    else
-        if frame.rebuffBorderAnim then
-            frame.rebuffBorderAnim:Stop()
-        end
-        if frame.rebuffBorder then
-            frame.rebuffBorder:Hide()
-        end
-    end
-end
-
--- Hide a buff frame and clear its glow
+-- Hide a buff frame and clear its glow and rebuff border.
+-- Overlays and action buttons are managed solely by SyncSecureButtons() based on
+-- frame:IsShown(), so we don't touch them here — avoids hide/show flicker when
+-- UpdateDisplay() hides all frames then re-shows visible ones each tick.
 local function HideFrame(frame)
     frame:Hide()
     SetExpirationGlow(frame, false)
     SetRebuffBorder(frame, false)
-    if frame.actionMainButton then
-        frame.actionMainButton:Hide()
-    end
-    if frame.actionHolder then
-        frame.actionHolder:Hide()
-    end
 end
 
 ---Show a frame with missing text styling
@@ -704,16 +722,13 @@ local DIRECTION_ANCHORS = {
     CENTER = "CENTER",
 }
 
-local FOOD_EATING_DURATION = 10
-local FOOD_EATING_ICON = 136000
-
 -- Create a category frame for grouped display mode
 local function CreateCategoryFrame(category)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     local catSettings = db.categorySettings and db.categorySettings[category] or defaults.categorySettings[category]
     local pos = catSettings.position or defaults.categorySettings[category].position
 
-    local frame = CreateFrame("Frame", "BuffRemindersV2_Category_" .. category, UIParent)
+    local frame = CreateFrame("Frame", "BuffReminders_Category_" .. category, UIParent)
     frame:SetSize(200, 50)
     frame:SetPoint("CENTER", UIParent, "CENTER", pos.x or 0, pos.y or 0)
     frame.category = category
@@ -754,6 +769,77 @@ local function UpdateIconStyling(frame, catSettings)
     frame.border:Show()
 end
 
+-- Find the first spell ID the player can actually cast (returns nil if none)
+---@param spellIDs SpellID
+---@return number?
+local function GetCastableSpellID(spellIDs)
+    if spellIDs == nil then
+        return nil
+    end
+    if type(spellIDs) ~= "table" then
+        return IsPlayerSpell(spellIDs) and spellIDs or nil
+    end
+    for _, id in ipairs(spellIDs) do
+        if IsPlayerSpell(id) then
+            return id
+        end
+    end
+    return nil
+end
+
+-- Pre-filter a buff's spell by talent/spec requirements, then find a castable spell ID.
+-- Checks excludeTalentSpellID, requiresTalentSpellID, and requireSpecId before delegating
+-- to GetCastableSpellID. Returns nil if the buff is filtered out or no spell is castable.
+---@param buff table The buff definition table
+---@return number?
+local function GetActionSpellID(buff)
+    if buff.excludeTalentSpellID and IsPlayerSpell(buff.excludeTalentSpellID) then
+        return nil
+    end
+    if buff.requiresTalentSpellID and not IsPlayerSpell(buff.requiresTalentSpellID) then
+        return nil
+    end
+    if buff.requireSpecId then
+        local spec = GetSpecialization()
+        if spec then
+            local specId = GetSpecializationInfo(spec)
+            if specId ~= buff.requireSpecId then
+                return nil
+            end
+        end
+    end
+    return GetCastableSpellID(buff.spellID)
+end
+
+-- Create a SecureActionButton overlay for click-to-cast on a buff frame.
+-- Parented to UIParent with NO anchors to the buff frame hierarchy, avoiding any
+-- layout dependency that would make the frame hierarchy protected/secure.
+-- Position is synced manually by SyncSecureButtons() after each layout pass.
+---@param frame table The parent buff frame
+local function CreateClickOverlay(frame)
+    local overlay = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+    overlay:RegisterForClicks("AnyDown", "AnyUp")
+    overlay:EnableMouse(false)
+    overlay:Hide()
+    -- Auto-hide in combat (secure state driver), auto-show after
+    RegisterStateDriver(overlay, "visibility", "[combat] hide; show")
+    -- When state driver re-shows after combat, hide if buff frame isn't visible
+    overlay:SetScript("OnShow", function(self)
+        if not frame:IsShown() then
+            self:Hide()
+        end
+    end)
+    -- Refresh display shortly after click so the consumed buff disappears quickly
+    overlay:SetScript("PostClick", function()
+        C_Timer.After(0.3, function()
+            if not InCombatLockdown() then
+                UpdateDisplay()
+            end
+        end)
+    end)
+    frame.clickOverlay = overlay
+end
+
 -- ============================================================================
 -- CONSUMABLE ACTION BUTTONS
 -- ============================================================================
@@ -762,223 +848,207 @@ local ACTION_ICON_SCALE = 0.45
 local ACTION_ICON_MIN = 18
 local ACTION_ICON_Y_OFFSET = -6
 
-local function CreateActionButton(parent)
-    local btn = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
-    btn:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "LeftButtonDown" or "LeftButtonUp")
+-- Quality pip atlas names for crafted consumables (rank 1/2/3)
+local QUALITY_ATLAS = {
+    [1] = "Professions-Icon-Quality-Tier1-Inv",
+    [2] = "Professions-Icon-Quality-Tier2-Inv",
+    [3] = "Professions-Icon-Quality-Tier3-Inv",
+}
+
+---Set or hide a quality pip overlay texture based on crafted quality.
+---@param overlay Texture The overlay texture to update
+---@param craftedQuality number? The crafted quality tier (1-3) or nil
+---@param size number The parent icon size (pip is 50% of this)
+local function SetQualityOverlay(overlay, craftedQuality, size)
+    local atlas = craftedQuality and QUALITY_ATLAS[craftedQuality]
+    if atlas then
+        overlay:SetAtlas(atlas)
+        overlay:SetSize(size * 0.5, size * 0.5)
+        overlay:Show()
+    else
+        overlay:Hide()
+    end
+end
+
+---Create a small SecureActionButton for the consumable item row.
+---Parented to UIParent with NO anchors to buff frames (avoids taint).
+---Position synced by SyncSecureButtons().
+---@return table btn The created button
+local function CreateActionButton()
+    local btn = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+    btn:RegisterForClicks("AnyDown", "AnyUp")
+    btn:Hide()
+    -- Start hidden — state driver activated by SyncSecureButtons() after positioning
+    RegisterStateDriver(btn, "visibility", "hide")
+    -- When state driver re-shows after combat, hide if buff frame isn't visible
+    btn:SetScript("OnShow", function(self)
+        local bf = self._br_buff_frame
+        if not bf or not bf:IsShown() then
+            self:Hide()
+        end
+    end)
+    -- Refresh display shortly after click so the consumed buff disappears quickly
+    btn:SetScript("PostClick", function()
+        C_Timer.After(0.3, function()
+            if not InCombatLockdown() then
+                UpdateDisplay()
+            end
+        end)
+    end)
 
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     btn.icon:SetAllPoints()
     btn.icon:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
 
-    btn.border = btn:CreateTexture(nil, "BACKGROUND")
-    btn.border:SetColorTexture(0, 0, 0, 1)
-
     btn.count = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
     btn.count:SetPoint("BOTTOMRIGHT", -1, 1)
 
-    btn.missingText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
-    btn.missingText:SetPoint("CENTER", 0, 0)
-    btn.missingText:Hide()
-
-    btn:SetScript("OnEnter", function(self)
-        if self.itemID then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetItemByID(self.itemID)
-            GameTooltip:Show()
-        end
-    end)
-    btn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    btn.qualityOverlay = btn:CreateTexture(nil, "OVERLAY")
+    btn.qualityOverlay:SetPoint("TOPLEFT", 1, -1)
+    btn.qualityOverlay:Hide()
 
     return btn
 end
 
-local function UpdateActionButtonStyling(btn, catSettings)
-    if IsMasqueActive() then
-        btn.icon:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
-        btn.border:Hide()
+-- Consumable item cache: only rescan bags when BAG_UPDATE_DELAYED fires
+local consumableCache = {} -- key → items array (or nil)
+local consumableCacheDirty = true
+
+local function InvalidateConsumableCache()
+    consumableCacheDirty = true
+end
+
+---Scan bags for all consumable categories and populate the cache.
+local function RefreshConsumableCache()
+    if not consumableCacheDirty then
         return
     end
-    local zoom = (catSettings.iconZoom or DEFAULT_ICON_ZOOM) / 100
-    btn.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
-    local borderSize = catSettings.borderSize or DEFAULT_BORDER_SIZE
-    btn.border:ClearAllPoints()
-    btn.border:SetPoint("TOPLEFT", -borderSize, borderSize)
-    btn.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
-    btn.border:Show()
-end
+    consumableCacheDirty = false
 
-local function IsFoodEatingActive(itemID)
-    local state = BR.ConsumableState
-    if not state or not state.foodEatingUntil then
-        return false
-    end
-    if state.foodEatingUntil <= GetTime() then
-        return false
-    end
-    if itemID and state.foodEatingItemID and itemID ~= state.foodEatingItemID then
-        return false
-    end
-    return true
-end
-
-local function AcquireConsumableItemFrame(index, parent)
-    local frame = consumableItemFrames[index]
-    if not frame then
-        frame = CreateActionButton(parent)
-        frame.buffCategory = "consumable"
-        frame.isConsumableItem = true
-        consumableItemFrames[index] = frame
-    end
-    if parent and frame:GetParent() ~= parent then
-        frame:SetParent(parent)
-        frame:ClearAllPoints()
-    end
-    return frame
-end
-
-local function HideConsumableItemFrames(startIndex)
-    for i = startIndex or 1, #consumableItemFrames do
-        consumableItemFrames[i]:Hide()
-    end
-end
-
-local function UpdateConsumableItemFrame(frame, item, missingText, entry, category)
-    local effectiveCat = (category and IsCategorySplit(category)) and category or "main"
-    local catSettings = GetCategorySettings(effectiveCat)
-    local size = catSettings.iconSize or 64
-
-    frame:SetSize(size, size)
-    frame:SetAlpha(catSettings.iconAlpha or 1)
-    frame.itemID = item.itemID
-    local iconTexture = item.icon or 134400
-    if entry and entry.key == "food" and IsFoodEatingActive(item.itemID) then
-        iconTexture = FOOD_EATING_ICON
-    end
-    frame.icon:SetTexture(iconTexture)
-    frame.count:SetText(item.count > 1 and tostring(item.count) or "")
-    frame.count:SetFont(fontPath, math.max(8, math.floor(size * 0.32)), "OUTLINE")
-    UpdateActionButtonStyling(frame, catSettings)
-
-    local displayText = nil
-    if entry and entry.rebuffWarning and entry.countText then
-        displayText = entry.countText
-    elseif missingText and missingText ~= "" then
-        displayText = missingText
+    if not C_Container or not C_Container.GetContainerNumSlots then
+        wipe(consumableCache)
+        return
     end
 
-    if displayText and ShouldShowText(category) then
-        local tc = catSettings.textColor or { 1, 1, 1 }
-        local ta = catSettings.textAlpha or 1
-        frame.missingText:SetText(displayText)
-        frame.missingText:SetFont(fontPath, GetFontSize(MISSING_TEXT_SCALE, catSettings.textSize, catSettings.iconSize), "OUTLINE")
-        frame.missingText:SetTextColor(tc[1], tc[2], tc[3], ta)
-        frame.missingText:Show()
-    else
-        frame.missingText:Hide()
-    end
-
-    if entry and entry.rebuffWarning and ShouldShowText(category) then
-        frame.count:Hide()
-    else
-        frame.count:Show()
-    end
-
-    if frame._br_action_item ~= item.itemID then
-        if entry and entry.key == "weaponBuff" then
-            frame:SetAttribute("type", "macro")
-            frame:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
-        else
-            frame:SetAttribute("type", "item")
-            frame:SetAttribute("item", "item:" .. tostring(item.itemID))
+    local itemSets = BR.CONSUMABLE_ITEMS or {}
+    -- Scan all bags once, bucket items by consumable category
+    local buckets = {} -- category → { [itemID] = { count, icon } }
+    local maxBags = NUM_BAG_SLOTS or 4
+    for bag = 0, maxBags do
+        local slots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, slots do
+            local itemID = C_Container.GetContainerItemID(bag, slot)
+            if itemID then
+                for category, allowedSet in pairs(itemSets) do
+                    if allowedSet[itemID] and not (buckets[category] and buckets[category][itemID]) then
+                        if not buckets[category] then
+                            buckets[category] = {}
+                        end
+                        local ok, count = pcall(C_Item.GetItemCount, itemID, false, true)
+                        count = (ok and count) or 0
+                        if count > 0 then
+                            local info = C_Container.GetContainerItemInfo(bag, slot)
+                            local icon = info and info.iconFileID or nil
+                            local itemLink = info and info.hyperlink
+                            local cq = nil
+                            if itemLink then
+                                -- Parse crafted quality tier from the embedded atlas in the item link
+                                -- e.g. |A:Professions-ChatIcon-Quality-Tier2:17:15::1|a → tier 2
+                                local tier = tostring(itemLink):match("Professions%-ChatIcon%-Quality%-Tier(%d)")
+                                if tier then
+                                    cq = tonumber(tier)
+                                end
+                            end
+                            buckets[category][itemID] = {
+                                itemID = itemID,
+                                count = count,
+                                icon = icon,
+                                craftedQuality = cq,
+                            }
+                        end
+                    end
+                end
+            end
         end
-        frame._br_action_item = item.itemID
     end
 
-    SetRebuffBorder(frame, entry and entry.rebuffWarning)
-    frame:Show()
-end
-
-local function EnsureMainActionButton(frame)
-    if frame.actionMainButton then
-        return frame.actionMainButton
-    end
-
-    local btn = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
-    btn:SetAllPoints(frame)
-    btn:RegisterForClicks(GetCVarBool("ActionButtonUseKeyDown") and "LeftButtonDown" or "LeftButtonUp")
-    btn:SetFrameLevel(frame:GetFrameLevel() + 5)
-
-    btn:SetScript("OnEnter", function(self)
-        if self.itemID then
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetItemByID(self.itemID)
-            GameTooltip:Show()
+    -- Convert buckets to sorted arrays
+    wipe(consumableCache)
+    for category, entries in pairs(buckets) do
+        local items = {}
+        for _, item in pairs(entries) do
+            items[#items + 1] = item
         end
-    end)
-    btn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-
-    frame.actionMainButton = btn
-    return btn
+        table.sort(items, function(a, b)
+            if a.count == b.count then
+                return a.itemID < b.itemID
+            end
+            return a.count > b.count
+        end)
+        consumableCache[category] = items
+    end
 end
 
-local function UpdateConsumableButtons(frame, actionItems)
-    if not actionItems or #actionItems == 0 then
-        if frame.actionHolder then
-            frame.actionHolder:Hide()
+-- Map buff key → CONSUMABLE_ITEMS category key
+local BUFF_KEY_TO_CATEGORY = {
+    flask = "flask",
+    food = "food",
+    rune = "rune",
+    weaponBuff = "weapon",
+}
+
+---Get cached consumable items for a buff definition.
+---@param buff table The buff definition table
+---@return table[]? items Array of { itemID, count, icon } sorted by count desc, or nil
+local function GetConsumableActionItems(buff)
+    if not buff then
+        return nil
+    end
+    local category = BUFF_KEY_TO_CATEGORY[buff.key]
+    if not category then
+        return nil
+    end
+    RefreshConsumableCache()
+    local items = consumableCache[category]
+    return items and #items > 0 and items or nil
+end
+
+---Create/update the item icons for a consumable buff frame.
+---Sets attributes, textures, and marks buttons visible. Positioning is handled
+---separately by SyncSecureButtons() (no anchors to avoid taint).
+---@param frame table The buff frame
+---@param actionItems table[]? Array of { itemID, count, icon }
+---@param clickable boolean? Whether buttons should accept mouse input
+local function UpdateConsumableButtons(frame, actionItems, clickable)
+    if not actionItems or #actionItems <= 1 then
+        if frame.actionButtons then
+            for _, btn in ipairs(frame.actionButtons) do
+                btn._br_visible = false
+                btn:Hide()
+            end
         end
         return
     end
 
-    if not frame.actionHolder then
-        frame.actionHolder = CreateFrame("Frame", nil, frame)
-        frame.actionHolder:SetFrameLevel(frame:GetFrameLevel() + 4)
+    if not frame.actionButtons then
         frame.actionButtons = {}
     end
-
-    local effectiveCat = GetEffectiveCategory(frame)
-    local catSettings = GetCategorySettings(effectiveCat)
-    local size = math.max(ACTION_ICON_MIN, math.floor((catSettings.iconSize or 64) * ACTION_ICON_SCALE))
-    local spacing = math.max(2, math.floor(size * 0.2))
-    local totalWidth = #actionItems * size + (#actionItems - 1) * spacing
-
-    frame.actionHolder:SetSize(totalWidth, size)
-    frame.actionHolder:ClearAllPoints()
-    frame.actionHolder:SetPoint("TOP", frame, "BOTTOM", 0, ACTION_ICON_Y_OFFSET)
-    frame.actionHolder:Show()
 
     for i, item in ipairs(actionItems) do
         local btn = frame.actionButtons[i]
         if not btn then
-            btn = CreateActionButton(frame.actionHolder)
+            btn = CreateActionButton()
+            btn._br_buff_frame = frame
             frame.actionButtons[i] = btn
         end
 
-        btn:SetSize(size, size)
-        btn:SetAlpha(catSettings.iconAlpha or 1)
-        btn:ClearAllPoints()
-        if i == 1 then
-            btn:SetPoint("LEFT", frame.actionHolder, "LEFT", 0, 0)
-        else
-            btn:SetPoint("LEFT", frame.actionButtons[i - 1], "RIGHT", spacing, 0)
-        end
-
         btn.itemID = item.itemID
-        local iconTexture = item.icon or 134400
-        if frame.buffCategory == "consumable" and frame.key == "food" and IsFoodEatingActive(item.itemID) then
-            iconTexture = FOOD_EATING_ICON
-        end
-        btn.icon:SetTexture(iconTexture)
-        btn.count:SetText(item.count > 1 and tostring(item.count) or "")
-        btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
-        btn.missingText:Hide()
-        UpdateActionButtonStyling(btn, catSettings)
+        btn.icon:SetTexture(item.icon or 134400)
+        btn._br_craftedQuality = item.craftedQuality
 
+        -- Dirty tracking: skip redundant SetAttribute calls
         if btn._br_action_item ~= item.itemID then
-            if frame.buffCategory == "consumable" and frame.key == "weaponBuff" then
+            if frame.key == "weaponBuff" then
                 btn:SetAttribute("type", "macro")
                 btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
             else
@@ -988,118 +1058,205 @@ local function UpdateConsumableButtons(frame, actionItems)
             btn._br_action_item = item.itemID
         end
 
-        btn:Show()
+        btn:EnableMouse(clickable == true)
+        btn._br_visible = true
+        btn._br_count = item.count
+        btn._br_needs_sync = true
     end
 
+    -- Mark unused buttons hidden
     for i = #actionItems + 1, #frame.actionButtons do
+        frame.actionButtons[i]._br_visible = false
         frame.actionButtons[i]:Hide()
     end
 end
 
-local function UpdateActionButtons(frame, actionItems, actionSpellID)
-    if frame.buffCategory == "consumable" and UseConsumableItemIcons() then
-        if frame.actionMainButton then
-            frame.actionMainButton:Hide()
-        end
-        if frame.actionHolder then
-            frame.actionHolder:Hide()
-        end
-        frame.actionItems = actionItems
-        frame.actionSpellID = nil
+-- Sync all secure button positions/sizes/visibility with their buff frames.
+-- Uses screen coordinates (no anchors) so secure frames never taint the buff hierarchy.
+-- Safe to call at any time; skips if in combat lockdown.
+local function SyncSecureButtons()
+    if InCombatLockdown() then
         return
     end
-
-    if testMode or InCombatLockdown() then
-        if actionSpellID and frame.actionMainButton and frame.actionMainButton._br_action_spell == actionSpellID then
-            frame.actionMainButton:Show()
-            frame.actionItems = nil
-            frame.actionSpellID = actionSpellID
-            return
-        end
-        if frame.actionMainButton then
-            frame.actionMainButton:Hide()
-        end
-        if frame.actionHolder then
-            frame.actionHolder:Hide()
-        end
-        frame.actionItems = nil
-        frame.actionSpellID = nil
-        return
-    end
-
-    if actionItems and #actionItems > 0 then
-        UpdateConsumableButtons(frame, actionItems)
-        local item = actionItems[1]
-        if not item then
-            if frame.actionMainButton then
-                frame.actionMainButton:Hide()
-            end
-            if frame.actionHolder then
-                frame.actionHolder:Hide()
-            end
-            frame.actionItems = nil
-            frame.actionSpellID = nil
-            return
-        end
-
-        local btn = EnsureMainActionButton(frame)
-        btn.itemID = item.itemID
-
-        if btn._br_action_item ~= item.itemID then
-            if frame.buffCategory == "consumable" and frame.key == "weaponBuff" then
-                btn:SetAttribute("type", "macro")
-                btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
+    for _, frame in pairs(buffFrames) do
+        -- Sync click overlay
+        local overlay = frame.clickOverlay
+        if overlay then
+            if frame:IsShown() then
+                local left, bottom, width, height = frame:GetRect()
+                if left then
+                    -- Skip if position unchanged (avoids redundant ClearAllPoints/SetPoint)
+                    if
+                        overlay._br_left ~= left
+                        or overlay._br_bottom ~= bottom
+                        or overlay._br_width ~= width
+                        or overlay._br_height ~= height
+                    then
+                        overlay:ClearAllPoints()
+                        overlay:SetSize(width, height)
+                        overlay:SetFrameStrata(frame:GetFrameStrata())
+                        overlay:SetFrameLevel(frame:GetFrameLevel() + 5)
+                        overlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
+                        overlay._br_left = left
+                        overlay._br_bottom = bottom
+                        overlay._br_width = width
+                        overlay._br_height = height
+                    end
+                    if not overlay:IsShown() then
+                        overlay:Show()
+                    end
+                end
             else
-                btn:SetAttribute("type", "item")
-                btn:SetAttribute("item", "item:" .. tostring(item.itemID))
+                overlay:Hide()
+                overlay._br_left = nil
             end
-            btn._br_action_item = item.itemID
-            btn._br_action_spell = nil
         end
+        -- Sync action buttons (consumable item row)
+        if frame.actionButtons then
+            if frame:IsShown() then
+                local left, bottom, width, _ = frame:GetRect()
+                if left then
+                    local effectiveCat = GetEffectiveCategory(frame)
+                    local catSettings = GetCategorySettings(effectiveCat)
+                    local size = math.max(ACTION_ICON_MIN, math.floor((catSettings.iconSize or 64) * ACTION_ICON_SCALE))
+                    local btnSpacing = math.max(2, math.floor(size * 0.2))
+                    -- Count visible buttons
+                    local visibleCount = 0
+                    for _, btn in ipairs(frame.actionButtons) do
+                        if btn._br_visible then
+                            visibleCount = visibleCount + 1
+                        end
+                    end
+                    if visibleCount > 0 then
+                        -- Wrap into rows based on main icon width
+                        local maxPerRow = math.max(1, math.floor((width + btnSpacing) / (size + btnSpacing)))
+                        local idx = 0
+                        for _, btn in ipairs(frame.actionButtons) do
+                            if btn._br_visible then
+                                local col = idx % maxPerRow
+                                local row = math.floor(idx / maxPerRow)
+                                -- Recalculate row width for partial last row
+                                local thisRowCount = math.min(maxPerRow, visibleCount - row * maxPerRow)
+                                local thisRowWidth = thisRowCount * size + (thisRowCount - 1) * btnSpacing
+                                local thisRowStartX = left + (width - thisRowWidth) / 2
+                                local btnX = thisRowStartX + col * (size + btnSpacing)
+                                local btnY = bottom + ACTION_ICON_Y_OFFSET - size - row * (size + btnSpacing)
+                                local needsUpdate = btn._br_needs_sync
+                                    or btn._br_x ~= btnX
+                                    or btn._br_y ~= btnY
+                                    or btn._br_size ~= size
+                                if needsUpdate then
+                                    -- Reposition
+                                    btn:ClearAllPoints()
+                                    btn:SetSize(size, size)
+                                    btn:SetFrameStrata(frame:GetFrameStrata())
+                                    btn:SetFrameLevel(frame:GetFrameLevel() + 4)
+                                    btn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", btnX, btnY)
+                                    btn._br_x = btnX
+                                    btn._br_y = btnY
+                                    btn._br_size = size
+                                    -- Update text/font (only when data or size changed)
+                                    btn.count:SetText(
+                                        btn._br_count and btn._br_count > 1 and tostring(btn._br_count) or ""
+                                    )
+                                    btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
+                                    SetQualityOverlay(btn.qualityOverlay, btn._br_craftedQuality, size)
+                                    btn._br_needs_sync = false
+                                end
+                                -- Activate combat state driver on first show (buttons start with "hide" driver)
+                                if not btn._br_driver_active then
+                                    RegisterStateDriver(btn, "visibility", "[combat] hide; show")
+                                    btn._br_driver_active = true
+                                end
+                                if not btn:IsShown() then
+                                    btn:Show()
+                                end
+                                idx = idx + 1
+                            end
+                        end
+                    end
+                    -- Hide buttons that are no longer visible
+                    for _, btn in ipairs(frame.actionButtons) do
+                        if not btn._br_visible and btn._br_driver_active then
+                            RegisterStateDriver(btn, "visibility", "hide")
+                            btn._br_driver_active = false
+                            btn._br_x = nil
+                        end
+                    end
+                end
+            else
+                for _, btn in ipairs(frame.actionButtons) do
+                    if btn._br_driver_active then
+                        RegisterStateDriver(btn, "visibility", "hide")
+                        btn._br_driver_active = false
+                        btn._br_x = nil
+                    else
+                        btn:Hide()
+                    end
+                end
+            end
+        end
+        -- Sync extra frame click overlays (expanded consumable display mode)
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                local extraOverlay = extra.clickOverlay
+                if extraOverlay then
+                    if extra:IsShown() then
+                        local eLeft, eBottom, eWidth, eHeight = extra:GetRect()
+                        if eLeft then
+                            if
+                                extraOverlay._br_left ~= eLeft
+                                or extraOverlay._br_bottom ~= eBottom
+                                or extraOverlay._br_width ~= eWidth
+                                or extraOverlay._br_height ~= eHeight
+                            then
+                                extraOverlay:ClearAllPoints()
+                                extraOverlay:SetSize(eWidth, eHeight)
+                                extraOverlay:SetFrameStrata(extra:GetFrameStrata())
+                                extraOverlay:SetFrameLevel(extra:GetFrameLevel() + 5)
+                                extraOverlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", eLeft, eBottom)
+                                extraOverlay._br_left = eLeft
+                                extraOverlay._br_bottom = eBottom
+                                extraOverlay._br_width = eWidth
+                                extraOverlay._br_height = eHeight
+                            end
+                            if not extraOverlay:IsShown() then
+                                extraOverlay:Show()
+                            end
+                        end
+                    else
+                        extraOverlay:Hide()
+                        extraOverlay._br_left = nil
+                    end
+                end
+            end
+        end
+    end
+end
 
-        btn:Show()
-        frame.actionItems = actionItems
-        frame.actionSpellID = nil
+-- Schedule secure button sync for the next frame (after layout has been calculated)
+local syncPending = false
+local function ScheduleSecureSync()
+    if syncPending then
         return
     end
-
-    if frame.actionHolder then
-        frame.actionHolder:Hide()
-    end
-
-    if not actionSpellID then
-        if frame.actionMainButton then
-            frame.actionMainButton:Hide()
-        end
-        frame.actionItems = nil
-        frame.actionSpellID = nil
-        return
-    end
-
-    local btn = EnsureMainActionButton(frame)
-    btn.itemID = nil
-
-    if btn._br_action_spell ~= actionSpellID then
-        btn:SetAttribute("type", "spell")
-        btn:SetAttribute("spell", actionSpellID)
-        btn._br_action_spell = actionSpellID
-        btn._br_action_item = nil
-    end
-
-    btn:Show()
-    frame.actionItems = nil
-    frame.actionSpellID = actionSpellID
+    syncPending = true
+    C_Timer.After(0, function()
+        syncPending = false
+        SyncSecureButtons()
+    end)
 end
 
 -- Create icon frame for a buff
 local function CreateBuffFrame(buff, category)
-    local frame = CreateFrame("Frame", "BuffRemindersV2_" .. buff.key, mainFrame)
+    local frame = CreateFrame("Frame", "BuffReminders_" .. buff.key, mainFrame)
     frame.key = buff.key
     frame.spellIDs = buff.spellID
     frame.displayName = buff.name
     frame.buffCategory = category
+    frame.buffDef = buff
 
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     -- Use effective category settings (respects split categories)
     local effectiveCat = (category and IsCategorySplit(category)) and category or "main"
     local catSettings = GetCategorySettings(effectiveCat)
@@ -1113,6 +1270,10 @@ local function CreateBuffFrame(buff, category)
     end
     local texture = iconOverride or GetBuffTexture(buff.spellID, buff.iconByRole)
     CreateIconTextures(frame, texture)
+
+    frame.qualityOverlay = frame:CreateTexture(nil, "OVERLAY")
+    frame.qualityOverlay:SetPoint("TOPLEFT", 5, -4)
+    frame.qualityOverlay:Hide()
 
     -- Register with Masque (Normal = false: we handle borders, Masque handles TexCoord)
     if masqueGroup then
@@ -1132,6 +1293,11 @@ local function CreateBuffFrame(buff, category)
     frame.count:SetPoint("CENTER", 0, 0)
     frame.count:SetTextColor(textColor[1], textColor[2], textColor[3], textAlpha)
     frame.count:SetFont(fontPath, GetFontSize(1, catSettings.textSize, catSettings.iconSize), "OUTLINE")
+
+    -- Stack count (bottom-right, WoW-standard item count style) for consumables
+    frame.stackCount = frame:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    frame.stackCount:SetPoint("BOTTOMRIGHT", -5, 4)
+    frame.stackCount:Hide()
 
     -- Frame alpha
     frame:SetAlpha(catSettings.iconAlpha or 1)
@@ -1165,6 +1331,69 @@ local function CreateBuffFrame(buff, category)
     return frame
 end
 
+-- Get or create an extra frame for expanded consumable display mode.
+-- Extra frames are stored lazily in frame.extraFrames[index] and share the same
+-- visual structure as the main buff frame (icon, border, stackCount, Masque).
+---@param frame table The main consumable buff frame
+---@param index number 1-based index for the extra frame
+---@return table extra The extra frame (shown/hidden by caller)
+local function GetOrCreateExtraFrame(frame, index)
+    if not frame.extraFrames then
+        frame.extraFrames = {}
+    end
+    local extra = frame.extraFrames[index]
+    if extra then
+        return extra
+    end
+
+    extra = CreateFrame("Frame", nil, frame:GetParent())
+    extra.isExtraFrame = true
+    extra.mainFrame = frame
+    extra.buffCategory = frame.buffCategory
+    extra.key = frame.key .. "_extra_" .. index
+
+    local effectiveCat = GetEffectiveCategory(frame)
+    local catSettings = GetCategorySettings(effectiveCat)
+    local iconSize = catSettings.iconSize or 64
+    extra:SetSize(iconSize, iconSize)
+
+    CreateIconTextures(extra, nil)
+
+    extra.qualityOverlay = extra:CreateTexture(nil, "OVERLAY")
+    extra.qualityOverlay:SetPoint("TOPLEFT", 5, -4)
+    extra.qualityOverlay:Hide()
+
+    if masqueGroup then
+        masqueGroup:AddButton(extra, {
+            Icon = extra.icon,
+            Normal = false,
+        })
+    end
+
+    UpdateIconStyling(extra, catSettings)
+
+    -- Stack count (bottom-right, same as main frame)
+    extra.stackCount = extra:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    extra.stackCount:SetPoint("BOTTOMRIGHT", -5, 4)
+    extra.stackCount:Hide()
+
+    -- Count text (for consistency, though expanded frames mainly use stackCount)
+    local textColor = catSettings.textColor or { 1, 1, 1 }
+    local textAlpha = catSettings.textAlpha or 1
+    extra.count = extra:CreateFontString(nil, "OVERLAY", "NumberFontNormalLarge")
+    extra.count:SetPoint("CENTER", 0, 0)
+    extra.count:SetTextColor(textColor[1], textColor[2], textColor[3], textAlpha)
+    extra.count:SetFont(fontPath, GetFontSize(1, catSettings.textSize, catSettings.iconSize), "OUTLINE")
+    extra.count:Hide()
+
+    extra:SetAlpha(catSettings.iconAlpha or 1)
+    extra:EnableMouse(false)
+    extra:Hide()
+
+    frame.extraFrames[index] = extra
+    return extra
+end
+
 -- Helper to position frames within a container using specified settings
 local function PositionFramesInContainer(container, frames, iconSize, spacing, direction)
     local count = #frames
@@ -1194,7 +1423,7 @@ end
 
 -- Build a sorted category list by priority
 local function GetSortedCategories()
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     local sorted = {}
     for i, category in ipairs(CATEGORIES) do
         sorted[#sorted + 1] = { name = category, index = i }
@@ -1214,7 +1443,7 @@ end
 
 -- Position and size the main container frame with the given buff frames
 local function PositionMainContainer(mainFrameBuffs)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
 
     if #mainFrameBuffs > 0 then
         local mainSettings = GetCategorySettings("main")
@@ -1317,7 +1546,7 @@ RefreshTestDisplay = function()
         return
     end
 
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
 
     -- Hide all frames, clear glows, and hide test labels first
     for _, frame in pairs(buffFrames) do
@@ -1326,7 +1555,6 @@ RefreshTestDisplay = function()
             frame.testText:Hide()
         end
     end
-    HideConsumableItemFrames()
 
     local glowShown = false
 
@@ -1421,24 +1649,22 @@ RefreshTestDisplay = function()
         end
     end
 
-    -- Show ALL custom buffs (self buffs)
-    if db.customBuffs then
-        for _, customBuff in pairs(db.customBuffs) do
-            local frame = buffFrames[customBuff.key]
-            if frame then
-                if customBuff.missingText then
-                    frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
-                    frame.count:SetText(customBuff.missingText)
-                    frame.count:Show()
-                else
-                    frame.count:Hide()
-                end
-                if frame.testText and testModeData.showLabels then
-                    frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
-                    frame.testText:Show()
-                end
-                frame:Show()
+    -- Show ALL custom buffs
+    for _, buff in ipairs(CustomBuffs) do
+        local frame = buffFrames[buff.key]
+        if frame then
+            if buff.missingText then
+                frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
+                frame.count:SetText(buff.missingText)
+                frame.count:Show()
+            else
+                frame.count:Hide()
             end
+            if frame.testText and testModeData.showLabels then
+                frame.testText:SetFont(fontPath, GetFrameFontSize(frame, 0.6), "OUTLINE")
+                frame.testText:Show()
+            end
+            frame:Show()
         end
     end
 
@@ -1497,7 +1723,7 @@ ToggleTestMode = function(showLabels)
     else
         testMode = true
         -- Seed fake values for consistent display during test mode
-        local db = BuffRemindersV2DB
+        local db = BuffRemindersDB
         testModeData = {
             fakeTotal = math.random(10, 20),
             fakeRemaining = math.random(1, (db.defaults and db.defaults.expirationThreshold) or 15) * 60,
@@ -1515,7 +1741,6 @@ end
 -- Helper to hide all display frames (mainFrame, category frames, and all buff frames)
 local function HideAllDisplayFrames()
     mainFrame:Hide()
-    HideConsumableItemFrames()
     for _, category in ipairs(CATEGORIES) do
         if categoryFrames[category] then
             categoryFrames[category]:Hide()
@@ -1524,6 +1749,11 @@ local function HideAllDisplayFrames()
     -- Also hide individual buff frames (so they don't reappear when mainFrame is shown by fallback)
     for _, frame in pairs(buffFrames) do
         frame:Hide()
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:Hide()
+            end
+        end
     end
 end
 
@@ -1534,14 +1764,14 @@ UpdateFallbackDisplay = function()
         return
     end
 
-    -- Show frames for any glowing spells
+    -- Show frames for any glowing spells (skip invertGlow buffs — handled in second pass)
     local seenKeys = {}
     local GetPlayerSpecId = BR.StateHelpers.GetPlayerSpecId
     for spellID, _ in pairs(glowingSpells) do
         local entry = glowSpellToBuff[spellID]
         if entry then
             local buff = entry.buff
-            if buff.class == playerClass and not seenKeys[buff.key] then
+            if not buff.invertGlow and (not buff.class or buff.class == playerClass) and not seenKeys[buff.key] then
                 -- Skip targeted buffs when solo (they require a group target)
                 local skipSolo = entry.category == "targeted" and GetNumGroupMembers() == 0
                 -- Skip buffs requiring a specific spec
@@ -1550,7 +1780,31 @@ UpdateFallbackDisplay = function()
                     seenKeys[buff.key] = true
                     local frame = buffFrames[buff.key]
                     if frame and IsBuffEnabled(buff.key) then
-                        ShowMissingFrame(frame, buff.missingText or "NO\nBUFF!")
+                        ShowMissingFrame(frame, buff.missingText)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Second pass: show invertGlow buffs where NONE of their spells are glowing
+    local invertedHasGlow = {}
+    for spellID, _ in pairs(glowingSpells) do
+        local entry = glowSpellToBuff[spellID]
+        if entry and entry.buff.invertGlow then
+            invertedHasGlow[entry.buff.key] = true
+        end
+    end
+    for _, entry in pairs(glowSpellToBuff) do
+        local buff = entry.buff
+        if buff.invertGlow and not seenKeys[buff.key] and not invertedHasGlow[buff.key] then
+            seenKeys[buff.key] = true
+            if not buff.class or buff.class == playerClass then
+                local skipSpec = buff.requireSpecId and GetPlayerSpecId() ~= buff.requireSpecId
+                if not skipSpec then
+                    local frame = buffFrames[buff.key]
+                    if frame and IsBuffEnabled(buff.key) then
+                        ShowMissingFrame(frame, buff.missingText)
                     end
                 end
             end
@@ -1587,42 +1841,180 @@ UpdateFallbackDisplay = function()
     end
 end
 
+-- Eating icon texture ID (from State.lua, matches the eating channel aura icon)
+local EATING_ICON = BR.EATING_AURA_ICON
+
+-- Show/hide rebuff warning pulsing border on a buff frame (4-edge border, does not obscure icon)
+SetRebuffBorder = function(frame, show)
+    if show then
+        local color = (BuffRemindersDB and BuffRemindersDB.defaults and BuffRemindersDB.defaults.consumableRebuffColor)
+            or { 1, 0.5, 0 }
+        local cr, cg, cb = color[1], color[2], color[3]
+        if not frame.rebuffBorderFrame then
+            local thickness = 2
+            local holder = CreateFrame("Frame", nil, frame)
+            holder:SetPoint("TOPLEFT", -thickness, thickness)
+            holder:SetPoint("BOTTOMRIGHT", thickness, -thickness)
+            holder:SetFrameLevel(frame:GetFrameLevel() + 5)
+            -- Top
+            local t = holder:CreateTexture(nil, "OVERLAY")
+            t:SetPoint("TOPLEFT")
+            t:SetPoint("TOPRIGHT")
+            t:SetHeight(thickness)
+            t:SetColorTexture(cr, cg, cb, 1)
+            -- Bottom
+            local b = holder:CreateTexture(nil, "OVERLAY")
+            b:SetPoint("BOTTOMLEFT")
+            b:SetPoint("BOTTOMRIGHT")
+            b:SetHeight(thickness)
+            b:SetColorTexture(cr, cg, cb, 1)
+            -- Left
+            local l = holder:CreateTexture(nil, "OVERLAY")
+            l:SetPoint("TOPLEFT")
+            l:SetPoint("BOTTOMLEFT")
+            l:SetWidth(thickness)
+            l:SetColorTexture(cr, cg, cb, 1)
+            -- Right
+            local r = holder:CreateTexture(nil, "OVERLAY")
+            r:SetPoint("TOPRIGHT")
+            r:SetPoint("BOTTOMRIGHT")
+            r:SetWidth(thickness)
+            r:SetColorTexture(cr, cg, cb, 1)
+
+            local ag = holder:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(1)
+            fade:SetToAlpha(0.3)
+            fade:SetDuration(0.6)
+            fade:SetSmoothing("IN_OUT")
+            frame.rebuffBorderFrame = holder
+            frame.rebuffBorderAnim = ag
+            frame.rebuffBorderEdges = { t, b, l, r }
+            frame.rebuffBorderColor = { cr, cg, cb }
+        elseif
+            frame.rebuffBorderColor[1] ~= cr
+            or frame.rebuffBorderColor[2] ~= cg
+            or frame.rebuffBorderColor[3] ~= cb
+        then
+            for _, edge in ipairs(frame.rebuffBorderEdges) do
+                edge:SetColorTexture(cr, cg, cb, 1)
+            end
+            frame.rebuffBorderColor = { cr, cg, cb }
+        end
+        frame.rebuffBorderFrame:Show()
+        if not frame.rebuffBorderAnim:IsPlaying() then
+            frame.rebuffBorderAnim:Play()
+        end
+    else
+        if frame.rebuffBorderFrame then
+            frame.rebuffBorderAnim:Stop()
+            frame.rebuffBorderFrame:Hide()
+        end
+    end
+end
+
+-- Resolve the correct icon for a consumable frame.
+-- Uses the top item from the consumable cache (actual item in bags), falling back
+-- to the buff definition's iconOverride or buffIconID.
+local function ResolveConsumableIcon(frame)
+    local items = GetConsumableActionItems(frame.buffDef)
+    if items and items[1] and items[1].icon then
+        frame.icon:SetTexture(items[1].icon)
+        if frame.qualityOverlay then
+            SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
+        end
+    else
+        local def = frame.buffDef
+        local fallback = def and (def.iconOverride or def.buffIconID)
+        if fallback then
+            frame.icon:SetTexture(fallback)
+        end
+        if frame.qualityOverlay then
+            frame.qualityOverlay:Hide()
+        end
+    end
+end
+
 -- Render a single visible entry into its frame using the appropriate display type
 local function RenderVisibleEntry(frame, entry)
+    -- Hide stack count and quality overlay by default; only the consumable-with-items path shows them
+    frame.stackCount:Hide()
+    if frame.qualityOverlay then
+        frame.qualityOverlay:Hide()
+    end
+
+    -- Eating override: state provides isEating as a snapshot, so the display
+    -- never reads a live flag that can change mid-cycle.
+    if entry.isEating then
+        frame.icon:SetTexture(EATING_ICON)
+        frame._br_eating_icon = true
+        frame.count:Hide()
+        frame:Show()
+        SetExpirationGlow(frame, false)
+        SetRebuffBorder(frame, false)
+        return
+    elseif frame._br_eating_icon then
+        -- Transition from eating → not eating: restore the correct consumable icon
+        frame._br_eating_icon = nil
+        ResolveConsumableIcon(frame)
+    end
+
     if entry.displayType == "count" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
         SetExpirationGlow(frame, entry.shouldGlow)
-        SetRebuffBorder(frame, entry.rebuffWarning)
+        SetRebuffBorder(frame, false)
     elseif entry.displayType == "expiring" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
-        SetExpirationGlow(frame, true)
-        SetRebuffBorder(frame, false)
-    else -- "missing"
-        if entry.iconByRole then
-            local texture = GetBuffTexture(frame.spellIDs, entry.iconByRole)
-            if texture then
-                frame.icon:SetTexture(texture)
-            end
+        if entry.rebuffWarning then
+            SetRebuffBorder(frame, true)
+            SetExpirationGlow(frame, false)
+        else
+            SetRebuffBorder(frame, false)
+            SetExpirationGlow(frame, true)
         end
-        ShowMissingFrame(frame, entry.missingText)
-        SetRebuffBorder(frame, false)
+    else -- "missing"
+        -- Consumables with bag scan support: show actual item from bags
+        if BUFF_KEY_TO_CATEGORY[frame.key] then
+            local items = GetConsumableActionItems(frame.buffDef)
+            if items then
+                frame.icon:SetTexture(items[1].icon)
+                if frame.qualityOverlay then
+                    SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
+                end
+                frame.count:Hide()
+                frame.stackCount:SetText(items[1].count)
+                frame.stackCount:Show()
+                frame:Show()
+                SetExpirationGlow(frame, false)
+                SetRebuffBorder(frame, false)
+            elseif (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
+                ShowMissingFrame(frame, entry.missingText)
+                SetRebuffBorder(frame, false)
+            end
+            -- No items and setting is off: don't show the frame
+        else
+            if entry.iconByRole then
+                local texture = GetBuffTexture(frame.spellIDs, entry.iconByRole)
+                if texture then
+                    frame.icon:SetTexture(texture)
+                end
+            end
+            ShowMissingFrame(frame, entry.missingText)
+            SetRebuffBorder(frame, false)
+        end
     end
 
     -- Per-category text visibility (uses buff's actual category, not effective/main)
     if not ShouldShowText(frame.buffCategory) then
         frame.count:Hide()
-    end
-
-    if entry.displayType == "missing" then
-        UpdateActionButtons(frame, entry.actionItems, entry.actionSpellID)
-    else
-        UpdateActionButtons(frame, nil, entry.actionSpellID)
+        frame.stackCount:Hide()
     end
 end
 
@@ -1652,6 +2044,7 @@ UpdateDisplay = function()
         HideAllDisplayFrames()
         if not isDead then
             UpdateFallbackDisplay()
+            ScheduleSecureSync()
         end
         return
     end
@@ -1663,7 +2056,6 @@ UpdateDisplay = function()
         for _, frame in pairs(buffFrames) do
             HideFrame(frame)
         end
-        HideConsumableItemFrames()
 
         -- Render pet entries (visible, but positioning deferred to UpdateFallbackDisplay)
         local petEntries = BR.BuffState.visibleByCategory.pet
@@ -1680,10 +2072,11 @@ UpdateDisplay = function()
         end
 
         UpdateFallbackDisplay()
+        ScheduleSecureSync()
         return
     end
 
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
 
     -- Hide based on visibility settings
     if db.showOnlyOnReadyCheck and not BR.BuffState.GetReadyCheckState() then
@@ -1696,14 +2089,23 @@ UpdateDisplay = function()
         return
     end
 
+    if db.hideWhileResting and isResting then
+        HideAllDisplayFrames()
+        return
+    end
+
     -- Refresh buff state
     BR.BuffState.Refresh()
 
     -- Hide all frames first
     for _, frame in pairs(buffFrames) do
         HideFrame(frame)
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:Hide()
+            end
+        end
     end
-    HideConsumableItemFrames()
 
     local visibleByCategory = BR.BuffState.visibleByCategory
     local anyVisible = false
@@ -1713,20 +2115,6 @@ UpdateDisplay = function()
 
     -- Collect frames for main container (non-split) in priority order
     local mainFrameBuffs = {}
-    local consumableFrameIndex = 1
-
-    local function AddConsumableItemFrames(entry, frames, parent, category)
-        if UseConsumableItemIcons() and entry.actionItems and #entry.actionItems > 0 then
-            for _, item in ipairs(entry.actionItems) do
-                local itemFrame = AcquireConsumableItemFrame(consumableFrameIndex, parent)
-                UpdateConsumableItemFrame(itemFrame, item, entry.missingText, entry, category)
-                frames[#frames + 1] = itemFrame
-                consumableFrameIndex = consumableFrameIndex + 1
-            end
-            return true
-        end
-        return false
-    end
 
     for _, catEntry in ipairs(sortedCategories) do
         local category = catEntry.name
@@ -1742,13 +2130,42 @@ UpdateDisplay = function()
                 -- Render + position this split category directly
                 local frames = {}
                 for _, entry in ipairs(entries) do
-                    if category == "consumable" and AddConsumableItemFrames(entry, frames, categoryFrames[category], category) then
-                        -- Consumable items replace the main buff icon
-                    else
-                        local frame = buffFrames[entry.key]
-                        if frame then
-                            RenderVisibleEntry(frame, entry)
-                            frames[#frames + 1] = frame
+                    local frame = buffFrames[entry.key]
+                    if frame then
+                        RenderVisibleEntry(frame, entry)
+                        frames[#frames + 1] = frame
+                        -- Consumable display modes: sub-icons or expanded
+                        if entry.displayType == "missing" and BUFF_KEY_TO_CATEGORY[frame.key] and frame:IsShown() then
+                            local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
+                            local items = GetConsumableActionItems(frame.buffDef)
+                            if displayMode == "sub_icons" then
+                                local cs = db.categorySettings and db.categorySettings.consumable
+                                local clickable = cs and cs.clickable == true
+                                UpdateConsumableButtons(frame, items, clickable)
+                            else
+                                -- Not sub_icons: hide any leftover sub-icon buttons
+                                UpdateConsumableButtons(frame, nil)
+                                if displayMode == "expanded" and items and #items > 1 then
+                                    for i = 2, #items do
+                                        local extra = GetOrCreateExtraFrame(frame, i - 1)
+                                        extra:SetParent(frame:GetParent())
+                                        extra:SetSize(frame:GetWidth(), frame:GetHeight())
+                                        extra.icon:SetTexture(items[i].icon)
+                                        if extra.qualityOverlay then
+                                            SetQualityOverlay(
+                                                extra.qualityOverlay,
+                                                items[i].craftedQuality,
+                                                frame:GetWidth()
+                                            )
+                                        end
+                                        extra.stackCount:SetText(items[i].count)
+                                        extra.stackCount:Show()
+                                        extra.count:Hide()
+                                        extra:Show()
+                                        frames[#frames + 1] = extra
+                                    end
+                                end
+                            end
                         end
                     end
                 end
@@ -1756,13 +2173,42 @@ UpdateDisplay = function()
             else
                 -- Render, collect for main container
                 for _, entry in ipairs(entries) do
-                    if category == "consumable" and AddConsumableItemFrames(entry, mainFrameBuffs, mainFrame, category) then
-                        -- Consumable items replace the main buff icon
-                    else
-                        local frame = buffFrames[entry.key]
-                        if frame then
-                            RenderVisibleEntry(frame, entry)
-                            mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                    local frame = buffFrames[entry.key]
+                    if frame then
+                        RenderVisibleEntry(frame, entry)
+                        mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                        -- Consumable display modes: sub-icons or expanded
+                        if entry.displayType == "missing" and BUFF_KEY_TO_CATEGORY[frame.key] and frame:IsShown() then
+                            local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
+                            local items = GetConsumableActionItems(frame.buffDef)
+                            if displayMode == "sub_icons" then
+                                local cs = db.categorySettings and db.categorySettings.consumable
+                                local clickable = cs and cs.clickable == true
+                                UpdateConsumableButtons(frame, items, clickable)
+                            else
+                                -- Not sub_icons: hide any leftover sub-icon buttons
+                                UpdateConsumableButtons(frame, nil)
+                                if displayMode == "expanded" and items and #items > 1 then
+                                    for i = 2, #items do
+                                        local extra = GetOrCreateExtraFrame(frame, i - 1)
+                                        extra:SetParent(mainFrame)
+                                        extra:SetSize(frame:GetWidth(), frame:GetHeight())
+                                        extra.icon:SetTexture(items[i].icon)
+                                        if extra.qualityOverlay then
+                                            SetQualityOverlay(
+                                                extra.qualityOverlay,
+                                                items[i].craftedQuality,
+                                                frame:GetWidth()
+                                            )
+                                        end
+                                        extra.stackCount:SetText(items[i].count)
+                                        extra.stackCount:Show()
+                                        extra.count:Hide()
+                                        extra:Show()
+                                        mainFrameBuffs[#mainFrameBuffs + 1] = extra
+                                    end
+                                end
+                            end
                         end
                     end
                 end
@@ -1779,8 +2225,8 @@ UpdateDisplay = function()
     if not anyVisible then
         HideAllDisplayFrames()
     end
-    HideConsumableItemFrames(consumableFrameIndex)
     UpdateAnchor()
+    ScheduleSecureSync()
 end
 
 -- Start update ticker
@@ -1815,7 +2261,7 @@ end
 ---@param catKey string "main" or a category name
 ---@return table position {point, x, y}
 local function GetSavedPosition(catKey)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if catKey == "main" then
         return (db.categorySettings and db.categorySettings.main and db.categorySettings.main.position)
             or db.position
@@ -1832,7 +2278,7 @@ end
 ---@param x number
 ---@param y number
 local function SavePosition(catKey, x, y)
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     if not db.categorySettings then
         db.categorySettings = {}
     end
@@ -1937,6 +2383,124 @@ local function FinishMoverDrag(mover, catKey)
     RestoreContainer(catKey)
 end
 
+-- Coordinate popup: shared popup for typing exact X/Y positions on mover frames
+local coordPopup
+
+local function CreateCoordinatePopup()
+    local popup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    popup:SetSize(190, 110)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetClampedToScreen(true)
+    popup:EnableMouse(true)
+    popup:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    popup:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+    popup:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    -- Title
+    local title = popup:CreateFontString(nil, "OVERLAY")
+    title:SetFont(fontPath, 11, "OUTLINE")
+    title:SetPoint("TOP", 0, -8)
+    title:SetText("Set Position")
+    title:SetTextColor(1, 0.82, 0, 1)
+
+    -- X row
+    local xLabel = popup:CreateFontString(nil, "OVERLAY")
+    xLabel:SetFont(fontPath, 11, "OUTLINE")
+    xLabel:SetPoint("TOPLEFT", 10, -30)
+    xLabel:SetText("X")
+    xLabel:SetTextColor(1, 1, 1, 1)
+
+    local xEdit = CreateFrame("EditBox", nil, popup)
+    xEdit:SetSize(130, 20)
+    xEdit:SetFont(fontPath, 11, "")
+    xEdit:SetAutoFocus(false)
+    local xContainer = BR.StyleEditBox(xEdit)
+    xContainer:SetSize(130, 20)
+    xContainer:SetPoint("LEFT", xLabel, "RIGHT", 8, 0)
+
+    -- Y row
+    local yLabel = popup:CreateFontString(nil, "OVERLAY")
+    yLabel:SetFont(fontPath, 11, "OUTLINE")
+    yLabel:SetPoint("TOPLEFT", 10, -56)
+    yLabel:SetText("Y")
+    yLabel:SetTextColor(1, 1, 1, 1)
+
+    local yEdit = CreateFrame("EditBox", nil, popup)
+    yEdit:SetSize(130, 20)
+    yEdit:SetFont(fontPath, 11, "")
+    yEdit:SetAutoFocus(false)
+    local yContainer = BR.StyleEditBox(yEdit)
+    yContainer:SetSize(130, 20)
+    yContainer:SetPoint("LEFT", yLabel, "RIGHT", 8, 0)
+
+    -- Apply button
+    local applyBtn = BR.CreateButton(popup, "Apply", function()
+        local xVal = tonumber(xEdit:GetText())
+        local yVal = tonumber(yEdit:GetText())
+        if not xVal or not yVal then
+            return
+        end
+        local catKey = popup.catKey
+        xVal = RoundCoord(xVal)
+        yVal = RoundCoord(yVal)
+        SavePosition(catKey, xVal, yVal)
+        popup:Hide()
+    end)
+    applyBtn:SetPoint("BOTTOM", 0, 8)
+
+    -- Tab from X to Y
+    xEdit:SetScript("OnTabPressed", function()
+        yEdit:SetFocus()
+    end)
+
+    -- Enter triggers Apply on either editbox
+    xEdit:SetScript("OnEnterPressed", function()
+        applyBtn:Click()
+    end)
+    yEdit:SetScript("OnEnterPressed", function()
+        applyBtn:Click()
+    end)
+    yEdit:SetScript("OnTabPressed", function()
+        xEdit:SetFocus()
+    end)
+
+    -- Escape to close
+    popup:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            self:SetPropagateKeyboardInput(false)
+            self:Hide()
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
+
+    popup.xEdit = xEdit
+    popup.yEdit = yEdit
+    popup:Hide()
+    return popup
+end
+
+local function ShowCoordinatePopup(catKey, mover)
+    if not coordPopup then
+        coordPopup = CreateCoordinatePopup()
+    end
+    coordPopup.catKey = catKey
+    coordPopup.mover = mover
+    coordPopup:ClearAllPoints()
+    coordPopup:SetPoint("LEFT", mover, "RIGHT", 10, 0)
+
+    local pos = GetSavedPosition(catKey)
+    coordPopup.xEdit:SetText(tostring(pos.x or 0))
+    coordPopup.yEdit:SetText(tostring(pos.y or 0))
+
+    coordPopup:Show()
+    coordPopup.xEdit:SetFocus()
+end
+
 -- Create a mover frame for positioning a category.
 -- The mover is a 48×48 draggable frame parented to UIParent. Shown when unlocked.
 local function CreateMoverFrame(catKey, displayName)
@@ -1977,8 +2541,15 @@ local function CreateMoverFrame(catKey, displayName)
     local initAnchor = DIRECTION_ANCHORS[initDirection] or "CENTER"
     mover:SetPoint(initAnchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
 
+    -- Tooltip
+    BR.SetupTooltip(mover, "Buff Anchor", "Drag to reposition\nRight-click to set exact coordinates")
+
     -- Drag scripts
     mover:SetScript("OnDragStart", function(self)
+        GameTooltip:Hide()
+        if coordPopup then
+            coordPopup:Hide()
+        end
         DimContainer(catKey)
         self:StartMoving()
     end)
@@ -1988,6 +2559,13 @@ local function CreateMoverFrame(catKey, displayName)
     mover:SetScript("OnHide", function(self)
         if self:IsMovable() then
             FinishMoverDrag(self, catKey)
+        end
+    end)
+
+    -- Right-click to open coordinate popup
+    mover:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+            ShowCoordinatePopup(catKey, self)
         end
     end)
 
@@ -2011,10 +2589,10 @@ end
 
 -- Initialize main frame
 local function InitializeFrames()
-    mainFrame = CreateFrame("Frame", "BuffRemindersV2Frame", UIParent)
+    mainFrame = CreateFrame("Frame", "BuffRemindersFrame", UIParent)
     mainFrame:SetSize(200, 50)
 
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     local pos = (db.categorySettings and db.categorySettings.main and db.categorySettings.main.position)
         or db.position
         or { point = "CENTER", x = 0, y = 0 }
@@ -2032,17 +2610,10 @@ local function InitializeFrames()
         moverFrames[category] = CreateMoverFrame(category, CATEGORY_LABELS[category])
     end
 
-    -- Create buff frames for all categories
+    -- Create buff frames for all categories (including custom, populated by BuildCustomBuffArray)
     for category, buffArray in pairs(BUFF_TABLES) do
         for _, buff in ipairs(buffArray) do
             buffFrames[buff.key] = CreateBuffFrame(buff, category)
-        end
-    end
-
-    -- Create frames for custom buffs (always self buffs)
-    if db.customBuffs then
-        for _, customBuff in pairs(db.customBuffs) do
-            buffFrames[customBuff.key] = CreateBuffFrame(customBuff, "custom")
         end
     end
 
@@ -2059,8 +2630,9 @@ local function CreateCustomBuffFrameRuntime(customBuff)
         return
     end
     local frame = CreateBuffFrame(customBuff, "custom")
-    frame.isCustomBuff = true
     buffFrames[customBuff.key] = frame
+    table.insert(CustomBuffs, customBuff)
+    RegisterGlowBuff(customBuff, "custom")
 end
 
 -- Reparent all buff frames to appropriate parent based on split status
@@ -2076,6 +2648,11 @@ ReparentBuffFrames = function()
             frame:SetParent(mainFrame)
             frame:ClearAllPoints() -- Clear stale anchors after reparenting
         end
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:SetParent(frame:GetParent())
+            end
+        end
     end
 end
 
@@ -2084,9 +2661,32 @@ end
 local function RemoveCustomBuffFrame(key)
     local frame = buffFrames[key]
     if frame then
+        UnregisterGlowSpell(frame.spellIDs)
+        -- Clean up click overlay (unregister state driver before hiding)
+        if frame.clickOverlay and not InCombatLockdown() then
+            UnregisterStateDriver(frame.clickOverlay, "visibility")
+            frame.clickOverlay:EnableMouse(false)
+            frame.clickOverlay:Hide()
+            frame.clickOverlay = nil
+        end
+        -- Clean up action buttons
+        if frame.actionButtons and not InCombatLockdown() then
+            for _, btn in ipairs(frame.actionButtons) do
+                UnregisterStateDriver(btn, "visibility")
+                btn:Hide()
+            end
+            frame.actionButtons = nil
+        end
         frame:Hide()
         frame:SetParent(nil)
         buffFrames[key] = nil
+    end
+    -- Remove from BUFF_TABLES.custom array
+    for i = #CustomBuffs, 1, -1 do
+        if CustomBuffs[i].key == key then
+            table.remove(CustomBuffs, i)
+            break
+        end
     end
 end
 
@@ -2097,12 +2697,20 @@ BR.CustomBuffs = {
     UpdateFrame = function(key, spellIDValue, displayName)
         local frame = buffFrames[key]
         if frame then
+            -- Re-register glow lookup with new spellID
+            UnregisterGlowSpell(frame.spellIDs)
             local texture = GetBuffTexture(spellIDValue)
             if texture then
                 frame.icon:SetTexture(texture)
             end
             frame.displayName = displayName
             frame.spellIDs = spellIDValue
+            -- Rebuild array (modal creates a new object for db.customBuffs[key], staling the old ref)
+            BuildCustomBuffArray()
+            local customBuff = BuffRemindersDB and BuffRemindersDB.customBuffs and BuffRemindersDB.customBuffs[key]
+            if customBuff then
+                RegisterGlowBuff(customBuff, "custom")
+            end
         end
     end,
 }
@@ -2115,7 +2723,7 @@ UpdateAnchor = function()
         return
     end
 
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     local unlocked = not db.locked
 
     -- Main mover: show when unlocked AND not all categories split
@@ -2156,6 +2764,9 @@ end
 
 -- Hide all mover frames
 local function HideAllMovers()
+    if coordPopup then
+        coordPopup:Hide()
+    end
     for _, mover in pairs(moverFrames) do
         if mover then
             mover:Hide()
@@ -2188,7 +2799,7 @@ local function UpdateVisuals()
             local buffCat = frame.buffCategory
             local showReminder = false
             if buffCat == "raid" then
-                local cs = BuffRemindersV2DB.categorySettings and BuffRemindersV2DB.categorySettings.raid
+                local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.raid
                 showReminder = not cs or cs.showBuffReminder ~= false
             end
             frame.buffText:SetShown(showReminder)
@@ -2200,8 +2811,13 @@ local function UpdateVisuals()
             frame.count:Hide()
         end
 
-        if frame.actionItems or frame.actionSpellID then
-            UpdateActionButtons(frame, frame.actionItems, frame.actionSpellID)
+        -- Update extra frames (expanded consumable display mode)
+        if frame.extraFrames then
+            for _, extra in ipairs(frame.extraFrames) do
+                extra:SetSize(size, size)
+                UpdateIconStyling(extra, catSettings)
+                extra:SetAlpha(catSettings.iconAlpha or 1)
+            end
         end
     end
     if IsMasqueActive() then
@@ -2212,6 +2828,174 @@ local function UpdateVisuals()
     else
         UpdateDisplay()
     end
+end
+
+-- ============================================================================
+-- CLICK-TO-CAST OVERLAY MANAGEMENT
+-- ============================================================================
+
+-- Update action buttons for all frames in a category based on the clickable setting.
+-- Creates overlays lazily on first enable (WoW frames persist until /reload, so we
+-- avoid creating them until the feature is actually used).
+-- Must NOT be called during combat lockdown (secure frame operations are forbidden).
+---@param category string
+local function UpdateActionButtons(category)
+    if InCombatLockdown() then
+        return
+    end
+
+    local db = BuffRemindersDB
+    local cs = db.categorySettings and db.categorySettings[category]
+    local enabled = cs and cs.clickable == true
+
+    for _, frame in pairs(buffFrames) do
+        if frame.buffCategory == category then
+            if enabled then
+                -- Lazily create overlay on first enable
+                if not frame.clickOverlay then
+                    CreateClickOverlay(frame)
+                end
+                if category == "consumable" then
+                    local actionItems = GetConsumableActionItems(frame.buffDef)
+                    -- Update main overlay (uses first/best item)
+                    local mainBtn = frame.clickOverlay
+                    if actionItems and #actionItems > 0 then
+                        local item = actionItems[1]
+                        mainBtn.itemID = item.itemID
+                        if frame.key == "weaponBuff" then
+                            mainBtn:SetAttribute("type", "macro")
+                            mainBtn:SetAttribute("macrotext", "/use item:" .. item.itemID .. "\n/use 16")
+                        else
+                            mainBtn:SetAttribute("type", "item")
+                            mainBtn:SetAttribute("item", "item:" .. item.itemID)
+                        end
+                        mainBtn:EnableMouse(true)
+                    else
+                        mainBtn.itemID = nil
+                        mainBtn:EnableMouse(false)
+                    end
+                    -- Update clickability on existing sub-icon buttons
+                    local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
+                    if displayMode == "sub_icons" and frame.actionButtons then
+                        for _, btn in ipairs(frame.actionButtons) do
+                            btn:EnableMouse(true)
+                        end
+                    end
+                    -- Expanded mode: set up click overlays on extra frames
+                    if displayMode == "expanded" and frame.extraFrames and actionItems then
+                        for idx, extra in ipairs(frame.extraFrames) do
+                            local itemIdx = idx + 1 -- extra[1] = items[2], etc.
+                            if extra:IsShown() and actionItems[itemIdx] then
+                                if not extra.clickOverlay then
+                                    CreateClickOverlay(extra)
+                                end
+                                local eItem = actionItems[itemIdx]
+                                extra.clickOverlay.itemID = eItem.itemID
+                                if frame.key == "weaponBuff" then
+                                    extra.clickOverlay:SetAttribute("type", "macro")
+                                    extra.clickOverlay:SetAttribute(
+                                        "macrotext",
+                                        "/use item:" .. eItem.itemID .. "\n/use 16"
+                                    )
+                                else
+                                    extra.clickOverlay:SetAttribute("type", "item")
+                                    extra.clickOverlay:SetAttribute("item", "item:" .. eItem.itemID)
+                                end
+                                extra.clickOverlay:EnableMouse(true)
+                            elseif extra.clickOverlay then
+                                extra.clickOverlay:EnableMouse(false)
+                                extra.clickOverlay:Hide()
+                                extra.clickOverlay._br_left = nil
+                            end
+                        end
+                    elseif frame.extraFrames then
+                        -- Not expanded: disable extra overlays
+                        for _, extra in ipairs(frame.extraFrames) do
+                            if extra.clickOverlay then
+                                extra.clickOverlay:EnableMouse(false)
+                                extra.clickOverlay:Hide()
+                                extra.clickOverlay._br_left = nil
+                            end
+                        end
+                    end
+                else
+                    -- Spells: pre-filter by talent/spec, then check castability
+                    local overlay = frame.clickOverlay
+                    overlay.itemID = nil
+                    local castableID = GetActionSpellID(frame.buffDef)
+                    if castableID then
+                        overlay:SetAttribute("type", "spell")
+                        overlay:SetAttribute("spell", castableID)
+                        overlay:EnableMouse(true)
+                    else
+                        overlay:EnableMouse(false)
+                    end
+                end
+            elseif frame.clickOverlay then
+                frame.clickOverlay:EnableMouse(false)
+                frame.clickOverlay:Hide()
+                frame.clickOverlay._br_left = nil
+                -- Sub-icon buttons: disable mouse but keep visible if mode is sub_icons
+                local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
+                if frame.actionButtons then
+                    for _, btn in ipairs(frame.actionButtons) do
+                        btn:EnableMouse(false)
+                        if displayMode ~= "sub_icons" then
+                            if btn._br_driver_active then
+                                RegisterStateDriver(btn, "visibility", "hide")
+                                btn._br_driver_active = false
+                                btn._br_x = nil
+                            else
+                                btn:Hide()
+                            end
+                        end
+                    end
+                end
+                -- Also disable extra frame overlays
+                if frame.extraFrames then
+                    for _, extra in ipairs(frame.extraFrames) do
+                        if extra.clickOverlay then
+                            extra.clickOverlay:EnableMouse(false)
+                            extra.clickOverlay:Hide()
+                            extra.clickOverlay._br_left = nil
+                        end
+                    end
+                end
+            end
+        end
+    end
+    ScheduleSecureSync()
+end
+
+-- Refresh overlay spell attributes for all frames (e.g., after spec change).
+-- Re-checks talent/spec pre-filters and IsPlayerSpell, updates EnableMouse + spell attribute.
+-- Also refreshes consumable action buttons.
+local function RefreshOverlaySpells()
+    if InCombatLockdown() then
+        return
+    end
+
+    local db = BuffRemindersDB
+    for _, frame in pairs(buffFrames) do
+        if frame.clickOverlay then
+            local category = frame.buffCategory
+            local cs = category and db.categorySettings and db.categorySettings[category]
+            local enabled = cs and cs.clickable == true
+            if enabled and category ~= "consumable" then
+                local overlay = frame.clickOverlay
+                local castableID = GetActionSpellID(frame.buffDef)
+                if castableID then
+                    overlay:SetAttribute("type", "spell")
+                    overlay:SetAttribute("spell", castableID)
+                    overlay:EnableMouse(true)
+                else
+                    overlay:EnableMouse(false)
+                end
+            end
+        end
+    end
+    -- Also refresh consumable action buttons
+    UpdateActionButtons("consumable")
 end
 
 -- ============================================================================
@@ -2237,12 +3021,16 @@ CallbackRegistry:RegisterCallback("LayoutRefresh", function()
     end
 end)
 
--- Display changes (enabled buffs, visibility settings)
+-- Display changes (enabled buffs, visibility settings, consumable display mode)
 CallbackRegistry:RegisterCallback("DisplayRefresh", function()
     if testMode then
         RefreshTestDisplay()
     else
         UpdateDisplay()
+    end
+    -- Refresh consumable action button clickability/visibility after mode changes
+    if not InCombatLockdown() then
+        UpdateActionButtons("consumable")
     end
 end)
 
@@ -2297,7 +3085,7 @@ BR.Helpers = {
 
 -- Toggle lock state: when unlocked, show mover frames for dragging
 local function ToggleLock()
-    local db = BuffRemindersV2DB
+    local db = BuffRemindersDB
     db.locked = not db.locked
     if db.locked then
         HideAllMovers()
@@ -2315,6 +3103,7 @@ BR.Display = {
     ToggleLock = ToggleLock,
     UpdateVisuals = UpdateVisuals,
     UpdateFallback = UpdateFallbackDisplay,
+    UpdateActionButtons = UpdateActionButtons,
     IsTestMode = function()
         return testMode
     end,
@@ -2367,14 +3156,14 @@ local function ExportSettings()
 
     -- Only export fields that exist in defaults
     for key in pairs(defaults) do
-        if BuffRemindersV2DB[key] ~= nil then
-            export[key] = DeepCopy(BuffRemindersV2DB[key])
+        if BuffRemindersDB[key] ~= nil then
+            export[key] = DeepCopy(BuffRemindersDB[key])
         end
     end
 
     -- Also include custom buffs
-    if BuffRemindersV2DB.customBuffs then
-        export.customBuffs = DeepCopy(BuffRemindersV2DB.customBuffs)
+    if BuffRemindersDB.customBuffs then
+        export.customBuffs = DeepCopy(BuffRemindersDB.customBuffs)
     end
 
     local result = SerializeTable(export)
@@ -2391,14 +3180,14 @@ local function ImportSettings(str)
         return false, err
     end
 
-    -- Deep merge imported data into BuffRemindersV2DB
+    -- Deep merge imported data into BuffRemindersDB
     for k, v in pairs(data) do
-        BuffRemindersV2DB[k] = DeepCopy(v)
+        BuffRemindersDB[k] = DeepCopy(v)
     end
 
     -- Re-apply metatable on defaults (DeepCopy produces a plain table)
-    if BuffRemindersV2DB.defaults then
-        setmetatable(BuffRemindersV2DB.defaults, { __index = defaults.defaults })
+    if BuffRemindersDB.defaults then
+        setmetatable(BuffRemindersDB.defaults, { __index = defaults.defaults })
     end
 
     return true
@@ -2409,10 +3198,10 @@ end
 -- ============================================================================
 
 --- Export settings to a prefixed string that can be imported by other addons
---- @param profileKey string|nil Optional profile name (ignored - BuffRemindersV2 uses single profile)
---- @return string|nil Encoded settings string with !BRV2_ prefix, or nil on error
+--- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
+--- @return string|nil Encoded settings string with !BR_ prefix, or nil on error
 --- @return string|nil Error message if export failed
-function BuffRemindersV2:Export(profileKey)
+function BuffReminders:Export(profileKey)
     local exportString, err = ExportSettings()
     if not exportString then
         return nil, err
@@ -2421,11 +3210,11 @@ function BuffRemindersV2:Export(profileKey)
 end
 
 --- Import settings from a prefixed string
---- @param importString string The encoded settings string (must start with !BRV2_)
---- @param profileKey string|nil Optional profile name (ignored - BuffRemindersV2 uses single profile)
+--- @param importString string The encoded settings string (must start with !BR_)
+--- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
 --- @return boolean success Whether the import succeeded
 --- @return string|nil error Error message if import failed
-function BuffRemindersV2:Import(importString, profileKey)
+function BuffReminders:Import(importString, profileKey)
     if not importString or type(importString) ~= "string" then
         return false, "Invalid import string"
     end
@@ -2447,6 +3236,16 @@ local function SlashHandler(msg)
 
     if cmd == "test" then
         ToggleTestMode(false) -- no labels, for previews
+    elseif cmd == "lock" then
+        BuffRemindersDB.locked = true
+        HideAllMovers()
+        BR.Components.RefreshAll()
+        print("|cff00ccffBuffReminders:|r Frames locked.")
+    elseif cmd == "unlock" then
+        BuffRemindersDB.locked = false
+        UpdateAnchor()
+        BR.Components.RefreshAll()
+        print("|cff00ccffBuffReminders:|r Frames unlocked.")
     else
         BR.Options.Toggle()
     end
@@ -2470,26 +3269,38 @@ eventFrame:RegisterEvent("TRAIT_CONFIG_UPDATED")
 eventFrame:RegisterEvent("UNIT_PET")
 eventFrame:RegisterEvent("PET_BAR_UPDATE")
 eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+eventFrame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
+eventFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
 eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 
-eventFrame:SetScript("OnEvent", function(_, event, arg1)
+eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "ADDON_LOADED" and arg1 == addonName then
         _, playerClass = UnitClass("player")
         BR.BuffState.SetPlayerClass(playerClass)
-        if not BuffRemindersV2DB then
-            BuffRemindersV2DB = {}
+        if not BuffRemindersDB then
+            BuffRemindersDB = {}
         end
 
         -- Notify users about the rename (shows once)
-        if not BuffRemindersV2DB.renameNotificationShown then
-            BuffRemindersV2DB.renameNotificationShown = true
-            print("|cff00ccffBuffRemindersV2:|r This addon was renamed from |cffffcc00RaidBuffsTracker|r.")
+        if not BuffRemindersDB.renameNotificationShown then
+            BuffRemindersDB.renameNotificationShown = true
+            print("|cff00ccffBuffReminders:|r This addon was renamed from |cffffcc00RaidBuffsTracker|r.")
             print(
-                "|cff00ccffBuffRemindersV2:|r Your previous settings could not be migrated. Use |cffffcc00/brv2|r to reconfigure."
+                "|cff00ccffBuffReminders:|r Your previous settings could not be migrated. Use |cffffcc00/br|r to reconfigure."
             )
         end
 
-        -- Removed rewrite notice spam on login.
+        -- Notify users about recent rewrite (delayed, can be disabled)
+        if BuffRemindersDB.showLoginMessages ~= false then
+            C_Timer.After(3, function()
+                print(
+                    "|cff00ccffBuffReminders:|r Heads up! Recent versions include a near-complete rewrite of the addon."
+                )
+                print(
+                    "|cff00ccffBuffReminders:|r Sorry if something broke! Please report issues on Discord (preferred), GitHub, or CurseForge."
+                )
+            end)
+        end
 
         -- Deep copy default values for missing keys (skips 'defaults' sub-table, served by metatable)
         local function DeepCopyDefault(source, target)
@@ -2513,12 +3324,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             end
         end
 
-        local db = BuffRemindersV2DB
+        local db = BuffRemindersDB
 
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 5
+        local DB_VERSION = 10
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2695,6 +3506,92 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
                     db.position = nil
                 end
             end,
+
+            -- [6] Add sensible difficulty defaults for consumables (mythic only, no LFR)
+            [6] = function()
+                if not db.categoryVisibility then
+                    return
+                end
+                local vis = db.categoryVisibility.consumable
+                if not vis then
+                    return
+                end
+                -- Add dungeon difficulty defaults (mythic only) if not already set
+                if not vis.dungeonDifficulty then
+                    vis.dungeonDifficulty = {
+                        normal = false,
+                        heroic = false,
+                        mythic = true,
+                        mythicPlus = false,
+                        timewalking = false,
+                        follower = false,
+                    }
+                end
+                -- Add raid difficulty defaults (no LFR) if not already set
+                if not vis.raidDifficulty then
+                    vis.raidDifficulty = {
+                        lfr = false,
+                        normal = true,
+                        heroic = true,
+                        mythic = true,
+                    }
+                end
+            end,
+
+            -- [7] Rename custom buff specId → requireSpecId (unify with built-in buff field names)
+            [7] = function()
+                if db.customBuffs then
+                    for _, customBuff in pairs(db.customBuffs) do
+                        if customBuff.specId ~= nil then
+                            customBuff.requireSpecId = customBuff.specId
+                            customBuff.specId = nil
+                        end
+                    end
+                end
+            end,
+
+            -- [8] Seed pre-configured Burning Rush custom buff (disabled by default)
+            [8] = function()
+                if not db.customBuffs then
+                    db.customBuffs = {}
+                end
+                local key = "burningRush"
+                if not db.customBuffs[key] then
+                    db.customBuffs[key] = {
+                        spellID = 111400,
+                        key = key,
+                        name = "Burning Rush",
+                        missingText = "",
+                        class = "WARLOCK",
+                        showWhenPresent = true,
+                    }
+                end
+                if not db.enabledBuffs then
+                    db.enabledBuffs = {}
+                end
+                if db.enabledBuffs[key] == nil then
+                    db.enabledBuffs[key] = false
+                end
+            end,
+
+            -- [9] Fix consumable dungeon difficulty default: mythic not M+
+            [9] = function()
+                local vis = db.categoryVisibility and db.categoryVisibility.consumable
+                if not vis or not vis.dungeonDifficulty then
+                    return
+                end
+                local dd = vis.dungeonDifficulty
+                -- Only fix if the user still has the old wrong defaults (M+ on, mythic off)
+                if dd.mythicPlus == true and dd.mythic == false then
+                    dd.mythic = true
+                    dd.mythicPlus = false
+                end
+            end,
+
+            -- [10] Clean up consumableItems (no longer user-configured; bag scanning replaces manual config)
+            [10] = function()
+                db.consumableItems = nil
+            end,
         }
 
         -- Run pending migrations
@@ -2716,9 +3613,15 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             db.defaults.textSize = nil
         end
 
-        -- Initialize custom buffs storage
+        -- Initialize custom buffs storage and populate BUFF_TABLES.custom
         if not db.customBuffs then
             db.customBuffs = {}
+        end
+        BuildCustomBuffArray()
+
+        -- Register custom buffs in glow fallback lookup (so they work in M+/combat)
+        for _, customBuff in ipairs(CustomBuffs) do
+            RegisterGlowBuff(customBuff, "custom")
         end
 
         -- Set up metatable so db.defaults inherits from code defaults
@@ -2743,17 +3646,17 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             end
         end
 
-        SLASH_BUFFREMINDERSV2_1 = "/brv2"
-        SLASH_BUFFREMINDERSV2_2 = "/buffremindersv2"
-        SlashCmdList["BUFFREMINDERSV2"] = SlashHandler
+        SLASH_BUFFREMINDERS1 = "/br"
+        SLASH_BUFFREMINDERS2 = "/buffreminders"
+        SlashCmdList["BUFFREMINDERS"] = SlashHandler
 
         -- Register with WoW's Interface Options
         local settingsPanel = CreateFrame("Frame")
-        settingsPanel.name = "BuffRemindersV2"
+        settingsPanel.name = "BuffReminders"
 
         local title = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
         title:SetPoint("TOPLEFT", 16, -16)
-        title:SetText("BuffRemindersV2")
+        title:SetText("BuffReminders")
 
         local desc = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
@@ -2773,7 +3676,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
 
         local slashInfo = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
         slashInfo:SetPoint("TOPLEFT", openBtn, "BOTTOMLEFT", 0, -12)
-        slashInfo:SetText("Slash commands: /brv2 or /buffremindersv2")
+        slashInfo:SetText("Slash commands: /br, /br lock, /br unlock, /br test")
 
         local category = Settings.RegisterCanvasLayoutCategory(settingsPanel, settingsPanel.name)
         Settings.RegisterAddOnCategory(category)
@@ -2782,11 +3685,21 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         BR.BuffState.InvalidateContentTypeCache()
         BR.BuffState.InvalidateSpellCache()
         BR.BuffState.InvalidateSpecCache()
-        -- Sync combat flag with current state (in case of reload while in combat)
+        -- Sync flags with current state (in case of reload)
         inCombat = InCombatLockdown()
+        isResting = IsResting()
+        BR.StateHelpers.ScanEatingState()
         ResolveFontPath()
+        InvalidateConsumableCache()
         if not mainFrame then
             InitializeFrames()
+            -- Initialize action buttons for categories with clickable enabled
+            for _, cat in ipairs(CATEGORIES) do
+                local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[cat]
+                if cs and cs.clickable then
+                    UpdateActionButtons(cat)
+                end
+            end
         end
         SeedGlowingSpells() -- Catch glows that were active before event registration
         if not inCombat then
@@ -2800,6 +3713,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         UpdateDisplay()
     elseif event == "PLAYER_REGEN_ENABLED" then
         inCombat = false
+        RefreshOverlaySpells()
         StartUpdates()
     elseif event == "PLAYER_REGEN_DISABLED" then
         inCombat = true
@@ -2810,6 +3724,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_UNGHOST" then
         UpdateDisplay()
     elseif event == "UNIT_AURA" then
+        -- Track eating state from payload (cheap boolean flip, always runs)
+        if arg1 == "player" then
+            BR.StateHelpers.UpdateEatingState(arg2)
+        end
         -- Skip in combat (auras change frequently, but we can't check buffs anyway)
         -- Throttle rapid events (e.g., raid-wide buff application)
         if not InCombatLockdown() and mainFrame and mainFrame:IsShown() then
@@ -2828,7 +3746,11 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         UpdateDisplay()
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
         UpdateDisplay()
-    elseif event == "BAG_UPDATE_DELAYED" then
+    elseif event == "PLAYER_DIFFICULTY_CHANGED" then
+        BR.BuffState.InvalidateContentTypeCache()
+        UpdateDisplay()
+    elseif event == "PLAYER_UPDATE_RESTING" then
+        isResting = IsResting()
         UpdateDisplay()
     elseif event == "READY_CHECK" then
         -- Cancel any existing timer
@@ -2838,7 +3760,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         BR.BuffState.SetReadyCheckState(true)
         UpdateDisplay()
         -- Start timer to reset ready check state
-        local duration = BuffRemindersV2DB.readyCheckDuration or 15
+        local duration = BuffRemindersDB.readyCheckDuration or 15
         readyCheckTimer = C_Timer.NewTimer(duration, function()
             BR.BuffState.SetReadyCheckState(false)
             readyCheckTimer = nil
@@ -2856,10 +3778,14 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         -- Invalidate caches when player changes spec
         InvalidatePlayerRoleCache()
         BR.BuffState.InvalidateSpellCache()
+        RefreshOverlaySpells()
         UpdateDisplay()
     elseif event == "TRAIT_CONFIG_UPDATED" then
         -- Invalidate spell cache when talents change (within same spec)
         BR.BuffState.InvalidateSpellCache()
         UpdateDisplay()
+    elseif event == "BAG_UPDATE_DELAYED" then
+        InvalidateConsumableCache()
+        UpdateActionButtons("consumable")
     end
 end)
