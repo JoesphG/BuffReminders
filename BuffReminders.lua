@@ -654,6 +654,9 @@ local DIRECTION_ANCHORS = {
     CENTER = "CENTER",
 }
 
+local FOOD_EATING_DURATION = 10
+local FOOD_EATING_ICON = 136000
+
 -- Create a category frame for grouped display mode
 local function CreateCategoryFrame(category)
     local db = BuffRemindersV2DB
@@ -738,6 +741,24 @@ local function CreateActionButton(parent)
         GameTooltip:Hide()
     end)
 
+    btn:SetScript("OnClick", function(self)
+        if not self.itemID then
+            return
+        end
+        if not BR.CONSUMABLE_ITEMS or not BR.CONSUMABLE_ITEMS.food then
+            return
+        end
+        if not BR.CONSUMABLE_ITEMS.food[self.itemID] then
+            return
+        end
+        BR.ConsumableState = BR.ConsumableState or {}
+        BR.ConsumableState.foodEatingItemID = self.itemID
+        BR.ConsumableState.foodEatingUntil = GetTime() + FOOD_EATING_DURATION
+        if not InCombatLockdown() and UpdateDisplay then
+            UpdateDisplay()
+        end
+    end)
+
     return btn
 end
 
@@ -754,6 +775,20 @@ local function UpdateActionButtonStyling(btn, catSettings)
     btn.border:SetPoint("TOPLEFT", -borderSize, borderSize)
     btn.border:SetPoint("BOTTOMRIGHT", borderSize, -borderSize)
     btn.border:Show()
+end
+
+local function IsFoodEatingActive(itemID)
+    local state = BR.ConsumableState
+    if not state or not state.foodEatingUntil then
+        return false
+    end
+    if state.foodEatingUntil <= GetTime() then
+        return false
+    end
+    if itemID and state.foodEatingItemID and itemID ~= state.foodEatingItemID then
+        return false
+    end
+    return true
 end
 
 local function AcquireConsumableItemFrame(index, parent)
@@ -785,7 +820,11 @@ local function UpdateConsumableItemFrame(frame, item, missingText, entry, catego
     frame:SetSize(size, size)
     frame:SetAlpha(catSettings.iconAlpha or 1)
     frame.itemID = item.itemID
-    frame.icon:SetTexture(item.icon or 134400)
+    local iconTexture = item.icon or 134400
+    if entry and entry.key == "food" and IsFoodEatingActive(item.itemID) then
+        iconTexture = FOOD_EATING_ICON
+    end
+    frame.icon:SetTexture(iconTexture)
     frame.count:SetText(item.count > 1 and tostring(item.count) or "")
     frame.count:SetFont(fontPath, math.max(8, math.floor(size * 0.32)), "OUTLINE")
     UpdateActionButtonStyling(frame, catSettings)
@@ -882,7 +921,11 @@ local function UpdateConsumableButtons(frame, actionItems)
         end
 
         btn.itemID = item.itemID
-        btn.icon:SetTexture(item.icon or 134400)
+        local iconTexture = item.icon or 134400
+        if frame.buffCategory == "consumable" and frame.key == "food" and IsFoodEatingActive(item.itemID) then
+            iconTexture = FOOD_EATING_ICON
+        end
+        btn.icon:SetTexture(iconTexture)
         btn.count:SetText(item.count > 1 and tostring(item.count) or "")
         btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
         btn.missingText:Hide()
@@ -921,6 +964,12 @@ local function UpdateActionButtons(frame, actionItems, actionSpellID)
     end
 
     if testMode or InCombatLockdown() then
+        if actionSpellID and frame.actionMainButton and frame.actionMainButton._br_action_spell == actionSpellID then
+            frame.actionMainButton:Show()
+            frame.actionItems = nil
+            frame.actionSpellID = actionSpellID
+            return
+        end
         if frame.actionMainButton then
             frame.actionMainButton:Hide()
         end

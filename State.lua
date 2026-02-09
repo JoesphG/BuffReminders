@@ -1,5 +1,7 @@
 local _, BR = ...
 
+BR.ConsumableState = BR.ConsumableState or {}
+
 -- ============================================================================
 -- BUFF STATE MODULE
 -- ============================================================================
@@ -572,7 +574,7 @@ end
 ---@param checkWeaponEnchant? boolean
 ---@param itemID? number|number[]
 ---@return boolean
-local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant, itemID)
+local function ShouldShowConsumableBuff(buffKey, spellIDs, buffIconID, checkWeaponEnchant, itemID)
     -- Check buff auras by spell ID
     if spellIDs then
         local spellList = type(spellIDs) == "table" and spellIDs or { spellIDs }
@@ -585,6 +587,14 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
     end
 
     -- Check buff auras by icon ID (e.g., food buffs all use icon 136000)
+    local ignoreBuffIcon = false
+    if buffKey == "food" then
+        local state = BR.ConsumableState
+        if state and state.foodEatingUntil and state.foodEatingUntil > GetTime() then
+            ignoreBuffIcon = true
+        end
+    end
+
     if buffIconID then
         for i = 1, 40 do
             local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
@@ -595,7 +605,9 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
                 return auraData.icon == buffIconID
             end)
             if success and iconMatches then
-                return false -- Has a buff with this icon
+                if not ignoreBuffIcon then
+                    return false -- Has a buff with this icon
+                end
             end
         end
     end
@@ -943,8 +955,13 @@ function BuffState.Refresh()
 
         local hasCaster = not buff.class or HasCasterForBuff(buff.class, buff.levelRequired)
         if IsBuffEnabled(settingKey) and consumableVisible and hasCaster and PassesPreChecks(buff, nil, db) then
-            local shouldShow =
-                ShouldShowConsumableBuff(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant, buff.itemID)
+            local shouldShow = ShouldShowConsumableBuff(
+                buff.key,
+                buff.spellID,
+                buff.buffIconID,
+                buff.checkWeaponEnchant,
+                buff.itemID
+            )
             if shouldShow then
                 entry.visible = true
                 entry.displayType = "missing"
