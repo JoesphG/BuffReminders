@@ -568,6 +568,37 @@ local function ShouldShowSelfBuff(
     return not hasBuff
 end
 
+local function GetConsumableRemaining(spellIDs, buffIconID)
+    if spellIDs then
+        local hasBuff, remaining = UnitHasBuff("player", spellIDs)
+        if hasBuff then
+            return remaining
+        end
+    end
+
+    if buffIconID then
+        local minRemaining
+        for i = 1, 40 do
+            local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            if not auraData then
+                break
+            end
+            local success, iconMatches = pcall(function()
+                return auraData.icon == buffIconID
+            end)
+            if success and iconMatches and auraData.expirationTime and auraData.expirationTime > 0 then
+                local remaining = auraData.expirationTime - GetTime()
+                if remaining and (not minRemaining or remaining < minRemaining) then
+                    minRemaining = remaining
+                end
+            end
+        end
+        return minRemaining
+    end
+
+    return nil
+end
+
 ---Check if player is missing a consumable buff, weapon enchant, or inventory item (returns true if missing)
 ---@param spellIDs? SpellID
 ---@param buffIconID? number
@@ -805,6 +836,7 @@ function BuffState.Refresh()
     -- so targeted/self/consumable/custom buffs never glow. Add expiration tracking to all categories.
     local glowDefaults = db.defaults or {}
     local expirationThreshold = (glowDefaults.expirationThreshold or 15) * 60
+    local rebuffTimeWarning = 30 * 60
     local showExpirationGlow = glowDefaults.showExpirationGlow ~= false
 
     -- Process raid buffs (coverage - need everyone to have them)
@@ -828,12 +860,14 @@ function BuffState.Refresh()
                     entry.expiringTime = minRemaining
                 end
                 entry.actionSpellID = GetActionSpellIDForBuff(buff)
-            elseif expiringSoon and minRemaining then
+            elseif minRemaining and minRemaining < rebuffTimeWarning then
                 entry.visible = true
-                entry.displayType = "expiring"
-                entry.expiringTime = minRemaining
+                entry.displayType = "count"
                 entry.countText = FormatRemainingTime(minRemaining)
-                entry.shouldGlow = true
+                entry.shouldGlow = expiringSoon or false
+                if expiringSoon then
+                    entry.expiringTime = minRemaining
+                end
                 entry.actionSpellID = GetActionSpellIDForBuff(buff)
             end
         end
@@ -862,12 +896,14 @@ function BuffState.Refresh()
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
                 entry.actionSpellID = GetActionSpellIDForBuff(buff)
-            elseif expiringSoon and minRemaining then
+            elseif minRemaining and minRemaining < rebuffTimeWarning then
                 entry.visible = true
-                entry.displayType = "expiring"
-                entry.expiringTime = minRemaining
+                entry.displayType = "count"
                 entry.countText = FormatRemainingTime(minRemaining)
-                entry.shouldGlow = true
+                entry.shouldGlow = expiringSoon or false
+                if expiringSoon then
+                    entry.expiringTime = minRemaining
+                end
                 entry.actionSpellID = GetActionSpellIDForBuff(buff)
             end
         end
@@ -955,6 +991,7 @@ function BuffState.Refresh()
 
         local hasCaster = not buff.class or HasCasterForBuff(buff.class, buff.levelRequired)
         if IsBuffEnabled(settingKey) and consumableVisible and hasCaster and PassesPreChecks(buff, nil, db) then
+            local remaining = GetConsumableRemaining(buff.spellID, buff.buffIconID)
             local shouldShow = ShouldShowConsumableBuff(
                 buff.key,
                 buff.spellID,
@@ -966,6 +1003,11 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
+                entry.actionItems = CollectConsumableActionItems(buff)
+            elseif remaining and remaining < rebuffTimeWarning then
+                entry.visible = true
+                entry.displayType = "count"
+                entry.countText = FormatRemainingTime(remaining)
                 entry.actionItems = CollectConsumableActionItems(buff)
             end
         end
