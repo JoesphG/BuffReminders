@@ -230,6 +230,8 @@ BR.CONSUMABLE_ITEMS = {
     [245933] = true,
   },
   rune = {
+    [201325] = true,
+    [201326] = true,
     [211495] = true,
     [224572] = true,
     [243191] = true,
