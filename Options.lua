@@ -877,6 +877,22 @@ local function CreateOptionsPanel()
     appLayout:SetX(appX + 20)
     appLayout:Add(defThresholdHolder, nil, COMPONENT_GAP)
 
+    local rebuffWarningHolder = Components.Slider(appearanceContent, {
+        label = "Rebuff warning",
+        min = 5,
+        max = 120,
+        step = 5,
+        get = function()
+            return BuffRemindersV2DB.defaults and BuffRemindersV2DB.defaults.rebuffTimeWarning or 30
+        end,
+        enabled = isExpirationGlowEnabled,
+        suffix = " min",
+        onChange = function(val)
+            BR.Config.Set("defaults.rebuffTimeWarning", val)
+        end,
+    })
+    appLayout:Add(rebuffWarningHolder, nil, COMPONENT_GAP)
+
     -- Style dropdown (on its own line)
     local styleOptions = {}
     for i, style in ipairs(GlowStyles) do

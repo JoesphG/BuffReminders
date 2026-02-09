@@ -568,7 +568,7 @@ local function ShouldShowSelfBuff(
     return not hasBuff
 end
 
-local function GetConsumableRemaining(spellIDs, buffIconID)
+local function GetConsumableRemaining(spellIDs, buffIconID, checkWeaponEnchant)
     if spellIDs then
         local hasBuff, remaining = UnitHasBuff("player", spellIDs)
         if hasBuff then
@@ -594,6 +594,20 @@ local function GetConsumableRemaining(spellIDs, buffIconID)
             end
         end
         return minRemaining
+    end
+
+    if checkWeaponEnchant then
+        local remaining
+        if currentWeaponEnchants.hasMainHand and currentWeaponEnchants.mainHandExpiration and currentWeaponEnchants.mainHandExpiration > 0 then
+            remaining = currentWeaponEnchants.mainHandExpiration / 1000
+        end
+        if currentWeaponEnchants.hasOffHand and currentWeaponEnchants.offHandExpiration and currentWeaponEnchants.offHandExpiration > 0 then
+            local offRemaining = currentWeaponEnchants.offHandExpiration / 1000
+            if not remaining or offRemaining < remaining then
+                remaining = offRemaining
+            end
+        end
+        return remaining
     end
 
     return nil
@@ -819,24 +833,27 @@ function BuffState.Refresh()
         entry.expiringTime = nil
         entry.actionItems = nil
         entry.actionSpellID = nil
+        entry.rebuffWarning = nil
     end
 
     -- Build valid unit cache once per refresh cycle
     BuildValidUnitCache()
 
     -- Fetch weapon enchant info once per refresh cycle
-    local hasMain, _, _, mainID, hasOff, _, _, offID = GetWeaponEnchantInfo()
+    local hasMain, mainExp, _, mainID, hasOff, offExp, _, offID = GetWeaponEnchantInfo()
     currentWeaponEnchants.hasMainHand = hasMain or false
     currentWeaponEnchants.mainHandID = mainID
+    currentWeaponEnchants.mainHandExpiration = mainExp or 0
     currentWeaponEnchants.hasOffHand = hasOff or false
     currentWeaponEnchants.offHandID = offID
+    currentWeaponEnchants.offHandExpiration = offExp or 0
 
     local playerOnly = db.showOnlyPlayerMissing
     -- TODO: make glow truly global — currently only raid/presence buffs track time remaining,
     -- so targeted/self/consumable/custom buffs never glow. Add expiration tracking to all categories.
     local glowDefaults = db.defaults or {}
     local expirationThreshold = (glowDefaults.expirationThreshold or 15) * 60
-    local rebuffTimeWarning = 30 * 60
+    local rebuffTimeWarning = (glowDefaults.rebuffTimeWarning or 30) * 60
     local showExpirationGlow = glowDefaults.showExpirationGlow ~= false
 
     -- Process raid buffs (coverage - need everyone to have them)
@@ -864,6 +881,7 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "count"
                 entry.countText = FormatRemainingTime(minRemaining)
+                entry.rebuffWarning = true
                 entry.shouldGlow = expiringSoon or false
                 if expiringSoon then
                     entry.expiringTime = minRemaining
@@ -900,6 +918,7 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "count"
                 entry.countText = FormatRemainingTime(minRemaining)
+                entry.rebuffWarning = true
                 entry.shouldGlow = expiringSoon or false
                 if expiringSoon then
                     entry.expiringTime = minRemaining
@@ -991,7 +1010,7 @@ function BuffState.Refresh()
 
         local hasCaster = not buff.class or HasCasterForBuff(buff.class, buff.levelRequired)
         if IsBuffEnabled(settingKey) and consumableVisible and hasCaster and PassesPreChecks(buff, nil, db) then
-            local remaining = GetConsumableRemaining(buff.spellID, buff.buffIconID)
+            local remaining = GetConsumableRemaining(buff.spellID, buff.buffIconID, buff.checkWeaponEnchant)
             local shouldShow = ShouldShowConsumableBuff(
                 buff.key,
                 buff.spellID,
@@ -1008,6 +1027,7 @@ function BuffState.Refresh()
                 entry.visible = true
                 entry.displayType = "count"
                 entry.countText = FormatRemainingTime(remaining)
+                entry.rebuffWarning = true
                 entry.actionItems = CollectConsumableActionItems(buff)
             end
         end

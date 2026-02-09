@@ -106,6 +106,7 @@ local DefaultSettingKeys = {
     -- Behavior (glow is global-only, lives under defaults)
     showExpirationGlow = "VisualsRefresh",
     expirationThreshold = "VisualsRefresh",
+    rebuffTimeWarning = "DisplayRefresh",
     glowStyle = "VisualsRefresh",
     -- Font (global-only, lives under defaults)
     fontFace = "VisualsRefresh",

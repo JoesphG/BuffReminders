@@ -133,6 +133,7 @@ local defaults = {
         showExpirationGlow = true,
         expirationThreshold = 15, -- minutes
         glowStyle = 1, -- 1=Orange, 2=Gold, 3=Yellow, 4=White, 5=Red
+        rebuffTimeWarning = 30, -- minutes (show time + border when below this)
     },
 
     ---@type CategoryVisibility
@@ -616,10 +617,59 @@ local function SetExpirationGlow(frame, show)
     end
 end
 
+local REBUFF_BORDER_ATLAS = "UI-Frame-DottedBorder"
+local REBUFF_BORDER_TEXTURE = "Interface\\Common\\UI-Frame-DottedBorder"
+local REBUFF_BORDER_FALLBACK = "Interface\\Buttons\\UI-ActionButton-Border"
+local REBUFF_BORDER_OUTSET = 18
+
+local function SetRebuffBorder(frame, show)
+    if show then
+        if not frame.rebuffBorder then
+            local border = frame:CreateTexture(nil, "OVERLAY")
+            border:SetDrawLayer("OVERLAY", 7)
+            border:SetPoint("TOPLEFT", -REBUFF_BORDER_OUTSET, REBUFF_BORDER_OUTSET)
+            border:SetPoint("BOTTOMRIGHT", REBUFF_BORDER_OUTSET, -REBUFF_BORDER_OUTSET)
+            if border.SetAtlas then
+                pcall(border.SetAtlas, border, REBUFF_BORDER_ATLAS, true)
+            end
+            border:SetTexture(REBUFF_BORDER_TEXTURE)
+            if not border:GetTexture() then
+                border:SetTexture(REBUFF_BORDER_FALLBACK)
+            end
+            border:SetTexCoord(0.06, 0.94, 0.06, 0.94)
+            border:SetBlendMode("ADD")
+            border:SetAlpha(0.9)
+            frame.rebuffBorder = border
+
+            local ag = border:CreateAnimationGroup()
+            ag:SetLooping("BOUNCE")
+            local fade = ag:CreateAnimation("Alpha")
+            fade:SetFromAlpha(0.9)
+            fade:SetToAlpha(0.3)
+            fade:SetDuration(0.6)
+            fade:SetSmoothing("IN_OUT")
+            frame.rebuffBorderAnim = ag
+        end
+        frame.rebuffBorder:SetDrawLayer("OVERLAY", 7)
+        frame.rebuffBorder:Show()
+        if frame.rebuffBorderAnim then
+            frame.rebuffBorderAnim:Play()
+        end
+    else
+        if frame.rebuffBorderAnim then
+            frame.rebuffBorderAnim:Stop()
+        end
+        if frame.rebuffBorder then
+            frame.rebuffBorder:Hide()
+        end
+    end
+end
+
 -- Hide a buff frame and clear its glow
 local function HideFrame(frame)
     frame:Hide()
     SetExpirationGlow(frame, false)
+    SetRebuffBorder(frame, false)
     if frame.actionMainButton then
         frame.actionMainButton:Hide()
     end
@@ -741,24 +791,6 @@ local function CreateActionButton(parent)
         GameTooltip:Hide()
     end)
 
-    btn:SetScript("OnClick", function(self)
-        if not self.itemID then
-            return
-        end
-        if not BR.CONSUMABLE_ITEMS or not BR.CONSUMABLE_ITEMS.food then
-            return
-        end
-        if not BR.CONSUMABLE_ITEMS.food[self.itemID] then
-            return
-        end
-        BR.ConsumableState = BR.ConsumableState or {}
-        BR.ConsumableState.foodEatingItemID = self.itemID
-        BR.ConsumableState.foodEatingUntil = GetTime() + FOOD_EATING_DURATION
-        if not InCombatLockdown() and UpdateDisplay then
-            UpdateDisplay()
-        end
-    end)
-
     return btn
 end
 
@@ -829,15 +861,28 @@ local function UpdateConsumableItemFrame(frame, item, missingText, entry, catego
     frame.count:SetFont(fontPath, math.max(8, math.floor(size * 0.32)), "OUTLINE")
     UpdateActionButtonStyling(frame, catSettings)
 
-    if missingText and missingText ~= "" and ShouldShowText(category) then
+    local displayText = nil
+    if entry and entry.rebuffWarning and entry.countText then
+        displayText = entry.countText
+    elseif missingText and missingText ~= "" then
+        displayText = missingText
+    end
+
+    if displayText and ShouldShowText(category) then
         local tc = catSettings.textColor or { 1, 1, 1 }
         local ta = catSettings.textAlpha or 1
-        frame.missingText:SetText(missingText)
+        frame.missingText:SetText(displayText)
         frame.missingText:SetFont(fontPath, GetFontSize(MISSING_TEXT_SCALE, catSettings.textSize, catSettings.iconSize), "OUTLINE")
         frame.missingText:SetTextColor(tc[1], tc[2], tc[3], ta)
         frame.missingText:Show()
     else
         frame.missingText:Hide()
+    end
+
+    if entry and entry.rebuffWarning and ShouldShowText(category) then
+        frame.count:Hide()
+    else
+        frame.count:Show()
     end
 
     if frame._br_action_item ~= item.itemID then
@@ -851,6 +896,7 @@ local function UpdateConsumableItemFrame(frame, item, missingText, entry, catego
         frame._br_action_item = item.itemID
     end
 
+    SetRebuffBorder(frame, entry and entry.rebuffWarning)
     frame:Show()
 end
 
@@ -1549,12 +1595,14 @@ local function RenderVisibleEntry(frame, entry)
         frame.count:Show()
         frame:Show()
         SetExpirationGlow(frame, entry.shouldGlow)
+        SetRebuffBorder(frame, entry.rebuffWarning)
     elseif entry.displayType == "expiring" then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
         frame:Show()
         SetExpirationGlow(frame, true)
+        SetRebuffBorder(frame, false)
     else -- "missing"
         if entry.iconByRole then
             local texture = GetBuffTexture(frame.spellIDs, entry.iconByRole)
@@ -1563,6 +1611,7 @@ local function RenderVisibleEntry(frame, entry)
             end
         end
         ShowMissingFrame(frame, entry.missingText)
+        SetRebuffBorder(frame, false)
     end
 
     -- Per-category text visibility (uses buff's actual category, not effective/main)
