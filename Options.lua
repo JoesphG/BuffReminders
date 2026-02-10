@@ -1795,9 +1795,13 @@ ShowGlowDemo = function()
         border:SetPoint("BOTTOMRIGHT", DEFAULT_BORDER_SIZE, -DEFAULT_BORDER_SIZE)
         border:SetColorTexture(0, 0, 0, 1)
 
-        style.setup(iconFrame)
-        if iconFrame.glowAnim then
-            iconFrame.glowAnim:Play()
+        if style.start then
+            style.start(iconFrame)
+        elseif style.setup then
+            style.setup(iconFrame)
+            if iconFrame.glowAnim then
+                iconFrame.glowAnim:Play()
+            end
         end
 
         local styleLabel = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
