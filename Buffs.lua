@@ -364,6 +364,7 @@ BR.BUFF_TABLES = {
                 1234969, -- Ethereal Augment Rune (TWW permanent)
                 1242347, -- Soulgorged Augment Rune (TWW raid drop)
                 1264426, -- Void-Touched Augment Rune (Midnight)
+                393438, -- Dreambound Augment Rune (buff)
             },
             displaySpellIDs = { 453250, 1234969, 1242347 }, -- Show TWW rune icons in UI
             key = "rune",

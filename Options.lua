@@ -1081,6 +1081,35 @@ local function CreateOptionsPanel()
             behaviorHeader:SetText("|cffffcc00Behavior|r")
             catLayout:AddText(behaviorHeader, 12, COMPONENT_GAP)
 
+            local displayModeHolder = Components.Dropdown(catContent, {
+                label = "Pet display",
+                get = function()
+                    local cs = BuffRemindersV2DB.categorySettings and BuffRemindersV2DB.categorySettings.pet
+                    return (cs and cs.displayMode) or "split"
+                end,
+                options = {
+                    { value = "split", label = "Separate row" },
+                    { value = "main", label = "Main row" },
+                },
+                tooltip = {
+                    title = "Pet display",
+                    desc = "Choose whether pet summon icons appear in their own row or alongside other categories.",
+                },
+                onChange = function(val)
+                    if not BuffRemindersV2DB.categorySettings then
+                        BuffRemindersV2DB.categorySettings = {}
+                    end
+                    if not BuffRemindersV2DB.categorySettings.pet then
+                        BuffRemindersV2DB.categorySettings.pet = {}
+                    end
+                    BuffRemindersV2DB.categorySettings.pet.displayMode = val
+                    BR.Display.ReparentBuffFrames()
+                    UpdateDisplay()
+                    Components.RefreshAll()
+                end,
+            })
+            catLayout:Add(displayModeHolder, nil, COMPONENT_GAP)
+
             local hideMountHolder = Components.Checkbox(catContent, {
                 label = "Hide while mounted",
                 get = function()

@@ -2,7 +2,7 @@
 ## Title: BuffRemindersV2
 ## Notes: Track missing buffs at a glance
 ## Author: zerbi
-## Version: 3.1.0
+## Version: 3.1.1
 ## SavedVariables: BuffRemindersV2DB
 ## X-Curse-Project-ID: 1441094
 ## X-Wago-ID: qGYZZjNg
@@ -16,6 +16,7 @@ Libs\LibSharedMedia-3.0\lib.xml
 Core.lua
 Buffs.lua
 ConsumableItems.lua
+Pets.lua
 State.lua
 Components.lua
 BuffRemindersV2.lua

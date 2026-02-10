@@ -135,6 +135,19 @@ local function HunterSpecAtlas(specID)
     return nil
 end
 
+local function HunterSpecName(specID)
+    if specID == 79 then
+        return "Cunning"
+    end
+    if specID == 74 then
+        return "Ferocity"
+    end
+    if specID == 81 then
+        return "Tenacity"
+    end
+    return nil
+end
+
 local function HunterAbilityIconForSpec(specID)
     if specID == 79 then
         return 348567
@@ -209,103 +222,7 @@ end
 
 ---@param buff table
 ---@return table[]? actionItems
-local function BuildPetActionItems(buff)
-    if not buff or not buff.key then
-        return nil
-    end
-    if IsMounted() then
-        return nil
-    end
-
-    -- Hunter: Call Pet 1-5 (only if slot has a pet), plus Revive Pet
-    if buff.key == "hunterPet" then
-        if IsMMWithoutUnbreakableBond() then
-            return nil
-        end
-        local items = {}
-        for slotIndex, spellID in ipairs(HUNTER_CALL_PET_SPELLS) do
-            if HunterSlotHasPet(slotIndex) and IsPlayerSpellCached(spellID) then
-                local info = C_StableInfo and C_StableInfo.GetStablePetInfo and C_StableInfo.GetStablePetInfo(slotIndex)
-                local name = info and (info.name or info.petName or info.customName) or ("Pet " .. tostring(slotIndex))
-                local icon = (info and (info.icon or info.iconFileID)) or GetSpellIcon(spellID) or buff.iconOverride
-                local familyName = info and (info.familyName or info.family)
-                local familyIcon = info and (info.familyIcon or info.icon or info.iconFileID)
-                local specID = info and info.specID
-                local specAtlas = specID and HunterSpecAtlas(specID) or nil
-                local hoverIcon = specID and HunterAbilityIconForSpec(specID) or nil
-                items[#items + 1] = {
-                    spellID = spellID,
-                    icon = icon,
-                    label = name,
-                    subLabel = "Pet " .. tostring(slotIndex),
-                    familyName = familyName,
-                    familyIcon = familyIcon,
-                    specAtlas = specAtlas,
-                    hoverIcon = hoverIcon,
-                }
-            end
-        end
-        if IsPlayerSpellCached(HUNTER_REVIVE_PET_SPELL) then
-            items[#items + 1] = {
-                spellID = HUNTER_REVIVE_PET_SPELL,
-                icon = GetSpellIcon(HUNTER_REVIVE_PET_SPELL),
-                label = "Revive Pet",
-                subLabel = "",
-                familyName = nil,
-                familyIcon = nil,
-            }
-        end
-        return #items > 0 and items or nil
-    end
-
-    -- Warlock: Summon demons (only if not sacrificed)
-    if buff.key == "warlockPet" then
-        if IsPlayerSpellCached(WARLOCK_SACRIFICE_SPELL) and HasSacrificeBuff() then
-            return nil
-        end
-        local items = {}
-        for _, spellID in ipairs(WARLOCK_SUMMON_SPELLS) do
-            if IsPlayerSpellCached(spellID) then
-                local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID) or nil
-                local name = info and info.name or nil
-                local icon = GetSpellIcon(spellID) or buff.iconOverride
-                items[#items + 1] = {
-                    spellID = spellID,
-                    icon = icon,
-                    label = name,
-                    subLabel = "",
-                    familyName = name,
-                    familyIcon = icon,
-                }
-            end
-        end
-        return #items > 0 and items or nil
-    end
-
-    -- Death Knight: Raise Dead
-    if buff.key == "unholyPet" then
-        if IsPlayerSpellCached(46584) then
-            local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(46584) or nil
-            local name = info and info.name or "Raise Dead"
-            local icon = GetSpellIcon(46584) or buff.iconOverride
-            return { { spellID = 46584, icon = icon, label = name, subLabel = "", familyName = "Ghoul" } }
-        end
-        return nil
-    end
-
-    -- Frost Mage: Water Elemental
-    if buff.key == "frostMagePet" then
-        if IsPlayerSpellCached(31687) then
-            local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(31687) or nil
-            local name = info and info.name or "Water Elemental"
-            local icon = GetSpellIcon(31687) or buff.iconOverride
-            return { { spellID = 31687, icon = icon, label = name, subLabel = "", familyName = "Elemental" } }
-        end
-        return nil
-    end
-
-    return nil
-end
+local BuildPetActions = BR.PetHelpers and BR.PetHelpers.BuildPetActions
 
 -- ============================================================================
 -- UTILITY FUNCTIONS
@@ -1116,6 +1033,23 @@ function BuffState.Refresh()
         petVisible = false
     end
     local petPassiveHidden = BuffRemindersV2DB.petPassiveOnlyInCombat and not UnitAffectingCombat("player")
+
+    -- Pet summon actions (replaces base no-pet icon when available)
+    local petActions = nil
+    if petVisible and BuildPetActions then
+        petActions = BuildPetActions()
+        if petActions and #petActions > 0 then
+            for i, action in ipairs(petActions) do
+                local entry = GetOrCreateEntry(action.key, "pet", i)
+                entry.visible = true
+                entry.displayType = "missing"
+                entry.missingText = nil
+                entry.iconByRole = nil
+                entry.actionItems = { action }
+            end
+        end
+    end
+
     for i, buff in ipairs(PetBuffs) do
         local entry = GetOrCreateEntry(buff.key, "pet", i)
         local settingKey = buff.groupId or buff.key
@@ -1132,11 +1066,13 @@ function BuffState.Refresh()
                 buff.requireSpecId
             )
             if shouldShow then
-                entry.visible = true
-                entry.displayType = "missing"
-                entry.missingText = buff.missingText
-                entry.iconByRole = buff.iconByRole
-                entry.actionItems = BuildPetActionItems(buff)
+                -- If we already have pet action entries, skip base no-pet icon
+                if not (petActions and #petActions > 0 and (buff.key == "hunterPet" or buff.key == "warlockPet" or buff.key == "unholyPet" or buff.key == "frostMagePet")) then
+                    entry.visible = true
+                    entry.displayType = "missing"
+                    entry.missingText = buff.missingText
+                    entry.iconByRole = buff.iconByRole
+                end
             end
         end
     end

@@ -234,6 +234,7 @@ local defaults = {
             clickable = false,
             clickableHighlight = true,
             priority = 5,
+            displayMode = "split", -- "split" (separate row) or "main" (inline with main row)
         },
         consumable = {
             position = { point = "CENTER", x = 0, y = -140 },
@@ -299,6 +300,10 @@ BR.CATEGORIES = CATEGORIES
 ---@return boolean
 local function IsCategorySplit(category)
     local db = BuffRemindersV2DB
+    if category == "pet" then
+        local mode = db.categorySettings and db.categorySettings.pet and db.categorySettings.pet.displayMode or "split"
+        return mode ~= "main"
+    end
     -- Check new location first (categorySettings.{cat}.split)
     if db.categorySettings and db.categorySettings[category] then
         if db.categorySettings[category].split ~= nil then
@@ -844,6 +849,34 @@ local function CreateClickOverlay(frame)
                 UpdateDisplay()
             end
         end)
+    end)
+    overlay:SetScript("OnEnter", function(self)
+        if self._br_hoverIcon and self._br_hoverTarget then
+            self._br_icon_restore = self._br_hoverTarget:GetTexture()
+            self._br_hoverTarget:SetTexture(self._br_hoverIcon)
+        end
+        if not self._br_tooltipTitle then
+            return
+        end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self._br_tooltipTitle)
+        if self._br_tooltipSub and self._br_tooltipSub ~= "" then
+            GameTooltip:AddLine(self._br_tooltipSub, 1, 1, 1, true)
+        end
+        if self._br_familyIcon or self._br_familyName then
+            local icon = self._br_familyIcon
+            local name = self._br_familyName or ""
+            local iconText = icon and ("|T" .. tostring(icon) .. ":16|t ") or ""
+            GameTooltip:AddLine(iconText .. name, 0.9, 0.9, 0.9, true)
+        end
+        GameTooltip:Show()
+    end)
+    overlay:SetScript("OnLeave", function(self)
+        if self._br_icon_restore and self._br_hoverTarget then
+            self._br_hoverTarget:SetTexture(self._br_icon_restore)
+            self._br_icon_restore = nil
+        end
+        GameTooltip_Hide()
     end)
     overlay.highlight = overlay:CreateTexture(nil, "HIGHLIGHT")
     overlay.highlight:SetAllPoints()
@@ -1664,18 +1697,49 @@ local function PositionSplitCategory(category, frames)
     if #frames > 0 then
         local iconSize = catSettings.iconSize or 64
         local spacing = math.floor(iconSize * (catSettings.spacing or 0.2))
-        -- Resize individual buff frames to category's icon size
-        for _, frame in ipairs(frames) do
-            frame:SetSize(iconSize, iconSize)
-        end
-
-        -- Size category frame to fit contents
-        local isVertical = direction == "UP" or direction == "DOWN"
-        local totalSize = #frames * iconSize + (#frames - 1) * spacing
-        if isVertical then
-            catFrame:SetSize(iconSize, math.max(totalSize, iconSize))
+        if category == "pet" then
+            local function FrameWidth(frame)
+                if frame and frame._br_action_inline and frame._br_inline_width then
+                    return frame._br_inline_width
+                end
+                return iconSize
+            end
+            local function FrameHeight(frame)
+                if frame and frame._br_action_inline and frame._br_inline_size then
+                    return frame._br_inline_size
+                end
+                return iconSize
+            end
+            for _, frame in ipairs(frames) do
+                if not frame._br_action_inline then
+                    frame:SetSize(iconSize, iconSize)
+                end
+            end
+            local isVertical = direction == "UP" or direction == "DOWN"
+            local totalSize = 0
+            for _, frame in ipairs(frames) do
+                totalSize = totalSize + (isVertical and FrameHeight(frame) or FrameWidth(frame))
+            end
+            totalSize = totalSize + (#frames - 1) * spacing
+            if isVertical then
+                catFrame:SetSize(iconSize, math.max(totalSize, iconSize))
+            else
+                catFrame:SetSize(math.max(totalSize, iconSize), iconSize)
+            end
         else
-            catFrame:SetSize(math.max(totalSize, iconSize), iconSize)
+            -- Resize individual buff frames to category's icon size
+            for _, frame in ipairs(frames) do
+                frame:SetSize(iconSize, iconSize)
+            end
+
+            -- Size category frame to fit contents
+            local isVertical = direction == "UP" or direction == "DOWN"
+            local totalSize = #frames * iconSize + (#frames - 1) * spacing
+            if isVertical then
+                catFrame:SetSize(iconSize, math.max(totalSize, iconSize))
+            else
+                catFrame:SetSize(math.max(totalSize, iconSize), iconSize)
+            end
         end
 
         catFrame:ClearAllPoints()
@@ -2196,28 +2260,72 @@ local function RenderVisibleEntry(frame, entry)
 end
 
 local function RenderPetEntry(frame, entry)
-    local db = BuffRemindersV2DB
     local catSettings = GetCategorySettings("pet")
-    if entry.actionItems and #entry.actionItems > 0 then
-        frame.icon:Hide()
-        if frame.border then
-            frame.border:Hide()
-        end
-        frame.count:Hide()
-        frame.stackCount:Hide()
-        if frame.qualityOverlay then
-            frame.qualityOverlay:Hide()
-        end
-        UpdatePetInlineButtons(frame, entry.actionItems, catSettings)
-        frame:Show()
-        return true
-    end
-
     frame._br_action_inline = false
-    frame.icon:Show()
     UpdateIconStyling(frame, catSettings)
     frame:SetSize(catSettings.iconSize or 64, catSettings.iconSize or 64)
     return RenderVisibleEntry(frame, entry)
+end
+
+local function EnsurePetActionFrame(actionKey)
+    if buffFrames[actionKey] then
+        return buffFrames[actionKey]
+    end
+    local action = BR.PetHelpers and BR.PetHelpers.GetActionDef(actionKey)
+    if not action then
+        return nil
+    end
+    local buffDef = {
+        key = action.key,
+        name = action.label or "Pet",
+        spellID = action.spellID,
+        missingText = "",
+        iconOverride = action.icon,
+        groupId = "pets",
+    }
+    local frame = CreateBuffFrame(buffDef, "pet")
+    frame.buffDef = buffDef
+    frame._br_pet_action = true
+    frame._br_action = action
+    if categoryFrames["pet"] then
+        frame:SetParent(categoryFrames["pet"])
+    end
+    buffFrames[actionKey] = frame
+    return frame
+end
+
+local function UpdatePetActionOverlay(frame, action)
+    if not frame or not action then
+        return
+    end
+    if not frame.clickOverlay then
+        CreateClickOverlay(frame)
+    end
+    local overlay = frame.clickOverlay
+    overlay._br_tooltipTitle = action.label or "Summon"
+    overlay._br_tooltipSub = action.subLabel
+    overlay._br_familyIcon = action.familyIcon
+    overlay._br_familyName = action.familyName
+    overlay._br_hoverIcon = action.hoverIcon
+    overlay._br_hoverTarget = frame.icon
+    if action.spellID then
+        overlay:SetAttribute("type", "spell")
+        overlay:SetAttribute("spell", action.spellID)
+        overlay:EnableMouse(true)
+    else
+        overlay:EnableMouse(false)
+    end
+    if action.specAtlas then
+        if not frame.specOverlay then
+            frame.specOverlay = frame:CreateTexture(nil, "OVERLAY")
+            frame.specOverlay:SetSize(14, 14)
+            frame.specOverlay:SetPoint("TOPLEFT", 1, -1)
+        end
+        frame.specOverlay:SetAtlas(action.specAtlas)
+        frame.specOverlay:Show()
+    elseif frame.specOverlay then
+        frame.specOverlay:Hide()
+    end
 end
 
 -- Render pet category entries (pet frames are non-secure and customCheck works in all contexts)
@@ -2231,8 +2339,14 @@ RenderPetEntries = function()
     end)
     for _, entry in ipairs(petEntries) do
         local frame = buffFrames[entry.key]
+        if not frame and entry.actionItems then
+            frame = EnsurePetActionFrame(entry.key)
+        end
         if frame then
             RenderPetEntry(frame, entry)
+            if entry.actionItems and entry.actionItems[1] then
+                UpdatePetActionOverlay(frame, entry.actionItems[1])
+            end
         end
     end
 end
@@ -2332,16 +2446,23 @@ UpdateDisplay = function()
             end)
             anyVisible = true
 
-            if IsCategorySplit(category) then
+            local isPetCategory = category == "pet"
+            if isPetCategory or IsCategorySplit(category) then
                 -- Render + position this split category directly
                 local frames = {}
                 for _, entry in ipairs(entries) do
                     local frame = buffFrames[entry.key]
+                    if not frame and entry.actionItems then
+                        frame = EnsurePetActionFrame(entry.key)
+                    end
                     if frame then
                         local shown = (category == "pet") and RenderPetEntry(frame, entry)
                             or RenderVisibleEntry(frame, entry)
                         if shown then
                             frames[#frames + 1] = frame
+                        end
+                        if category == "pet" and entry.actionItems and entry.actionItems[1] then
+                            UpdatePetActionOverlay(frame, entry.actionItems[1])
                         end
                         -- Consumable display modes: sub-icons or expanded (skip while eating)
                         if
@@ -2388,11 +2509,17 @@ UpdateDisplay = function()
                 -- Render, collect for main container
                 for _, entry in ipairs(entries) do
                     local frame = buffFrames[entry.key]
+                    if not frame and entry.actionItems then
+                        frame = EnsurePetActionFrame(entry.key)
+                    end
                     if frame then
                         local shown = (category == "pet") and RenderPetEntry(frame, entry)
                             or RenderVisibleEntry(frame, entry)
                         if shown then
                             mainFrameBuffs[#mainFrameBuffs + 1] = frame
+                        end
+                        if category == "pet" and entry.actionItems and entry.actionItems[1] then
+                            UpdatePetActionOverlay(frame, entry.actionItems[1])
                         end
                         -- Consumable display modes: sub-icons or expanded (skip while eating)
                         if
