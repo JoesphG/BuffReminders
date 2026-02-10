@@ -1,6 +1,6 @@
 local addonName, BR = ...
 BR.AddonName = addonName
-BR.DisplayName = addonName == "BuffRemindersV2" and "BuffRemindersV2" or "BuffReminders"
+BR.DisplayName = "BuffRemindersV2"
 
 -- Shared constants (from Core.lua)
 local DEFAULT_BORDER_SIZE = BR.DEFAULT_BORDER_SIZE
@@ -35,11 +35,8 @@ local function ResolveFontPath()
 end
 
 -- Global API table for external addon integration
-BuffReminders = {}
-BuffRemindersV2 = setmetatable({}, { __index = BuffReminders })
-local EXPORT_PREFIX_BR = "!BR_"
+BuffRemindersV2 = {}
 local EXPORT_PREFIX_V2 = "!BRV2_"
-local EXPORT_PREFIX = addonName == "BuffRemindersV2" and EXPORT_PREFIX_V2 or EXPORT_PREFIX_BR
 
 -- Buff tables from Buffs.lua (via BR namespace)
 local BUFF_TABLES = BR.BUFF_TABLES
@@ -3358,45 +3355,6 @@ end
 -- PUBLIC API (for external addon integration)
 -- ============================================================================
 
---- Export settings to a prefixed string that can be imported by other addons
---- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
---- @return string|nil Encoded settings string with !BR_ or !BRV2_ prefix, or nil on error
---- @return string|nil Error message if export failed
-function BuffReminders:Export(profileKey)
-    local exportString, err = ExportSettings()
-    if not exportString then
-        return nil, err
-    end
-    return EXPORT_PREFIX .. exportString
-end
-
---- Import settings from a prefixed string
---- @param importString string The encoded settings string (must start with !BR_ or !BRV2_)
---- @param profileKey string|nil Optional profile name (ignored - BuffReminders uses single profile)
---- @return boolean success Whether the import succeeded
---- @return string|nil error Error message if import failed
-function BuffReminders:Import(importString, profileKey)
-    if not importString or type(importString) ~= "string" then
-        return false, "Invalid import string"
-    end
-
-    -- Validate prefix
-    local prefix = nil
-    if importString:sub(1, #EXPORT_PREFIX_BR) == EXPORT_PREFIX_BR then
-        prefix = EXPORT_PREFIX_BR
-    elseif importString:sub(1, #EXPORT_PREFIX_V2) == EXPORT_PREFIX_V2 then
-        prefix = EXPORT_PREFIX_V2
-    end
-    if not prefix then
-        return false, "Invalid import string (missing prefix)"
-    end
-
-    -- Strip prefix and import
-    local dataString = importString:sub(#prefix + 1)
-    return ImportSettings(dataString)
-end
-
----@diagnostic disable-next-line: duplicate-set-field
 function BuffRemindersV2:Export(profileKey)
     local exportString, err = ExportSettings()
     if not exportString then
@@ -3405,9 +3363,17 @@ function BuffRemindersV2:Export(profileKey)
     return EXPORT_PREFIX_V2 .. exportString
 end
 
----@diagnostic disable-next-line: duplicate-set-field
 function BuffRemindersV2:Import(importString, profileKey)
-    return BuffReminders:Import(importString, profileKey)
+    if not importString or type(importString) ~= "string" then
+        return false, "Invalid import string"
+    end
+
+    if importString:sub(1, #EXPORT_PREFIX_V2) ~= EXPORT_PREFIX_V2 then
+        return false, "Invalid import string (missing prefix)"
+    end
+
+    local dataString = importString:sub(#EXPORT_PREFIX_V2 + 1)
+    return ImportSettings(dataString)
 end
 
 -- Slash command handler
@@ -3458,16 +3424,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "ADDON_LOADED" and arg1 == addonName then
         _, playerClass = UnitClass("player")
         BR.BuffState.SetPlayerClass(playerClass)
-        if addonName == "BuffRemindersV2" then
-            if not BuffRemindersV2DB then
-                BuffRemindersV2DB = {}
-            end
-            BuffRemindersDB = BuffRemindersV2DB
-        else
-            if not BuffRemindersDB then
-                BuffRemindersDB = BuffRemindersV2DB or {}
-            end
+        if not BuffRemindersV2DB then
+            BuffRemindersV2DB = {}
         end
+        BuffRemindersDB = BuffRemindersV2DB
 
         -- Notify users about the rename (shows once)
         if not BuffRemindersDB.renameNotificationShown then
@@ -3476,9 +3436,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             print(
                 "|cff00ccff"
                     .. BR.DisplayName
-                    .. ":|r Your previous settings could not be migrated. Use |cffffcc00/br"
-                    .. (addonName == "BuffRemindersV2" and "v2" or "")
-                    .. "|r to reconfigure."
+                    .. ":|r Your previous settings could not be migrated. Use |cffffcc00/br|r to reconfigure."
             )
         end
 
@@ -3872,9 +3830,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         end
 
         SLASH_BUFFREMINDERS1 = "/br"
-        SLASH_BUFFREMINDERS2 = "/buffreminders"
-        SLASH_BUFFREMINDERS3 = "/brv2"
-        SLASH_BUFFREMINDERS4 = "/buffremindersv2"
+        SLASH_BUFFREMINDERS2 = "/buffremindersv2"
         SlashCmdList["BUFFREMINDERS"] = SlashHandler
 
         -- Register with WoW's Interface Options

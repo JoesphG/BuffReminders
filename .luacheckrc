@@ -13,14 +13,11 @@ ignore = {
 
 globals = {
 	"_",
-	"BuffReminders",
 	"BuffRemindersV2",
 	"BuffRemindersDB",
 	"BuffRemindersV2DB",
 	"SLASH_BUFFREMINDERS1",
 	"SLASH_BUFFREMINDERS2",
-	"SLASH_BUFFREMINDERS3",
-	"SLASH_BUFFREMINDERS4",
 	"SlashCmdList",
 	"StaticPopupDialogs",
 }

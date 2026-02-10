@@ -1,4 +1,4 @@
-<h1 align="center">BuffReminders</h1>
+<h1 align="center">BuffRemindersV2</h1>
 <p align="center">
   <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/logo.png?raw=true" width="180" />
 </p>

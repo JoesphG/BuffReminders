@@ -1759,7 +1759,7 @@ local function CreateOptionsPanel()
     profLayout:Add(exportTextArea, 80, COMPONENT_GAP)
 
     local exportButton = CreateButton(profilesContent, "Export", function()
-        local exportString, err = BuffReminders:Export()
+        local exportString, err = BuffRemindersV2:Export()
         if exportString then
             exportTextArea:SetText(exportString)
             exportTextArea:HighlightText()
@@ -1790,7 +1790,7 @@ local function CreateOptionsPanel()
 
     local importButton = CreateButton(profilesContent, "Import", function()
         local importString = importTextArea:GetText()
-        local success, err = BuffReminders:Import(importString)
+        local success, err = BuffRemindersV2:Import(importString)
         if success then
             importStatus:SetText("|cff00ff00Settings imported successfully!|r")
             StaticPopup_Show("BUFFREMINDERS_RELOAD_UI")
