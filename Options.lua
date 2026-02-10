@@ -1047,8 +1047,8 @@ local function CreateOptionsPanel()
             catLayout:Add(showTextHolder, nil, COMPONENT_GAP)
         end
 
-        -- Click to cast checkbox (raid and consumable only)
-        if category == "raid" or category == "consumable" then
+        -- Click to cast checkbox (raid, consumable, pet)
+        if category == "raid" or category == "consumable" or category == "pet" then
             local clickableHolder = Components.Checkbox(catContent, {
                 label = "Click to cast",
                 get = function()

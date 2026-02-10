@@ -357,11 +357,12 @@ BR.BUFF_TABLES = {
         {
             spellID = {
                 453250, -- Crystallized Augment Rune (TWW)
+                393438, -- Draconic Augment Rune (DF)
                 1234969, -- Ethereal Augment Rune (TWW permanent)
                 1242347, -- Soulgorged Augment Rune (TWW raid drop)
                 1264426, -- Void-Touched Augment Rune (Midnight)
             },
-            displaySpellIDs = { 453250, 1234969, 1242347 }, -- Show TWW rune icons in UI
+            displaySpellIDs = { 453250, 393438, 1234969, 1242347 }, -- Show rune icons in UI
             key = "rune",
             name = "Rune",
             missingText = "NO\nRUNE",

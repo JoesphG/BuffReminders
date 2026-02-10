@@ -205,7 +205,7 @@ local defaults = {
             useCustomAppearance = false,
             showBuffReminder = true,
             split = false,
-            clickable = false,
+            clickable = true,
             priority = 1,
         },
         presence = {
@@ -233,7 +233,7 @@ local defaults = {
             position = { point = "CENTER", x = 0, y = -100 },
             useCustomAppearance = false,
             split = false,
-            clickable = false,
+            clickable = true,
             priority = 5,
         },
         consumable = {
@@ -424,6 +424,18 @@ local function ShouldShowText(category)
     end
     local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[category]
     return not cs or cs.showText ~= false
+end
+
+---Check if a category's icons should be clickable (uses defaults when not set in DB)
+---@param category string
+---@return boolean
+local function IsCategoryClickable(category)
+    local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[category]
+    local defaultClickable = defaults.categorySettings[category] and defaults.categorySettings[category].clickable
+    if cs and cs.clickable ~= nil then
+        return cs.clickable == true
+    end
+    return defaultClickable == true
 end
 
 -- Fallback text scale ratio (used when textSize is not set)
@@ -913,6 +925,34 @@ local function CreateActionButton()
     btn.qualityOverlay:SetPoint("TOPLEFT", 1, -1)
     btn.qualityOverlay:Hide()
 
+    btn:SetScript("OnEnter", function(self)
+        if self.hoverIcon and self.icon then
+            self._br_base_icon = self._br_base_icon or self.icon:GetTexture()
+            self.icon:SetTexture(self.hoverIcon)
+        end
+        if self.itemID or self.spellID then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if self.itemID then
+                GameTooltip:SetItemByID(self.itemID)
+            elseif self.spellID then
+                GameTooltip:SetSpellByID(self.spellID)
+                if self.petFamily then
+                    local icon = self.petFamilyIcon
+                    local iconTag = icon and ("|T" .. icon .. ":16:16:0:0|t ") or ""
+                    GameTooltip:AddLine(iconTag .. "Pet Family: " .. self.petFamily, 0.8, 0.8, 0.8)
+                end
+            end
+            GameTooltip:Show()
+        end
+    end)
+    btn:SetScript("OnLeave", function()
+        if self._br_base_icon and self.icon then
+            self.icon:SetTexture(self._br_base_icon)
+            self._br_base_icon = nil
+        end
+        GameTooltip:Hide()
+    end)
+
     return btn
 end
 
@@ -939,8 +979,7 @@ local function RefreshConsumableCache()
     local itemSets = BR.CONSUMABLE_ITEMS or {}
     -- Scan all bags once, bucket items by consumable category
     local buckets = {} -- category → { [itemID] = { count, icon } }
-    local maxBags = NUM_BAG_SLOTS or 4
-    for bag = 0, maxBags do
+    local function scanBag(bag)
         local slots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, slots do
             local itemID = C_Container.GetContainerItemID(bag, slot)
@@ -976,6 +1015,14 @@ local function RefreshConsumableCache()
                 end
             end
         end
+    end
+
+    local maxBags = NUM_BAG_SLOTS or 4
+    for bag = 0, maxBags do
+        scanBag(bag)
+    end
+    if REAGENTBAG_CONTAINER then
+        scanBag(REAGENTBAG_CONTAINER)
     end
 
     -- Convert buckets to sorted arrays
@@ -1025,8 +1072,8 @@ end
 ---@param frame table The buff frame
 ---@param actionItems table[]? Array of { itemID, count, icon }
 ---@param clickable boolean? Whether buttons should accept mouse input
-local function UpdateConsumableButtons(frame, actionItems, clickable)
-    if not actionItems or #actionItems <= 1 then
+local function UpdateConsumableButtons(frame, actionItems, clickable, forceShowSingle)
+    if not actionItems or (#actionItems <= 1 and not forceShowSingle) then
         if frame.actionButtons then
             for _, btn in ipairs(frame.actionButtons) do
                 btn._br_visible = false
@@ -1049,11 +1096,27 @@ local function UpdateConsumableButtons(frame, actionItems, clickable)
         end
 
         btn.itemID = item.itemID
-        btn.icon:SetTexture(item.icon or 134400)
+        btn.spellID = item.spellID
+        btn.petFamily = item.petFamily
+        btn.petFamilyIcon = item.petFamilyIcon
+        btn.hoverIcon = item.hoverIcon
+        local icon = item.icon
+        if not icon and item.spellID then
+            icon = GetSpellTexture(item.spellID)
+        end
+        btn.icon:SetTexture(icon or 134400)
+        btn._br_base_icon = icon
         btn._br_craftedQuality = item.craftedQuality
 
         -- Dirty tracking: skip redundant SetAttribute calls
-        if btn._br_action_item ~= item.itemID then
+        if item.spellID then
+            if btn._br_action_spell ~= item.spellID then
+                btn:SetAttribute("type", "spell")
+                btn:SetAttribute("spell", item.spellID)
+                btn._br_action_spell = item.spellID
+                btn._br_action_item = nil
+            end
+        elseif btn._br_action_item ~= item.itemID then
             if frame.key == "weaponBuff" then
                 btn:SetAttribute("type", "macro")
                 btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
@@ -1062,6 +1125,7 @@ local function UpdateConsumableButtons(frame, actionItems, clickable)
                 btn:SetAttribute("item", "item:" .. tostring(item.itemID))
             end
             btn._br_action_item = item.itemID
+            btn._br_action_spell = nil
         end
 
         btn:EnableMouse(clickable == true)
@@ -2022,6 +2086,11 @@ local function RenderVisibleEntry(frame, entry)
         frame.count:Hide()
         frame.stackCount:Hide()
     end
+
+    -- Pet summon action row (call/revive list)
+    if frame.buffCategory == "pet" then
+        UpdateConsumableButtons(frame, entry.actionItems, IsCategoryClickable("pet"), true)
+    end
 end
 
 -- Update the display
@@ -2145,9 +2214,7 @@ UpdateDisplay = function()
                             local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
                             local items = GetConsumableActionItems(frame.buffDef)
                             if displayMode == "sub_icons" then
-                                local cs = db.categorySettings and db.categorySettings.consumable
-                                local clickable = cs and cs.clickable == true
-                                UpdateConsumableButtons(frame, items, clickable)
+                                UpdateConsumableButtons(frame, items, IsCategoryClickable("consumable"))
                             else
                                 -- Not sub_icons: hide any leftover sub-icon buttons
                                 UpdateConsumableButtons(frame, nil)
@@ -2188,9 +2255,7 @@ UpdateDisplay = function()
                             local displayMode = (db.defaults or {}).consumableDisplayMode or "sub_icons"
                             local items = GetConsumableActionItems(frame.buffDef)
                             if displayMode == "sub_icons" then
-                                local cs = db.categorySettings and db.categorySettings.consumable
-                                local clickable = cs and cs.clickable == true
-                                UpdateConsumableButtons(frame, items, clickable)
+                                UpdateConsumableButtons(frame, items, IsCategoryClickable("consumable"))
                             else
                                 -- Not sub_icons: hide any leftover sub-icon buttons
                                 UpdateConsumableButtons(frame, nil)
@@ -2851,8 +2916,7 @@ local function UpdateActionButtons(category)
     end
 
     local db = BuffRemindersDB
-    local cs = db.categorySettings and db.categorySettings[category]
-    local enabled = cs and cs.clickable == true
+    local enabled = IsCategoryClickable(category)
 
     for _, frame in pairs(buffFrames) do
         if frame.buffCategory == category then
@@ -2924,6 +2988,12 @@ local function UpdateActionButtons(category)
                             end
                         end
                     end
+                elseif category == "pet" then
+                    if frame.actionButtons then
+                        for _, btn in ipairs(frame.actionButtons) do
+                            btn:EnableMouse(enabled)
+                        end
+                    end
                 else
                     -- Spells: pre-filter by talent/spec, then check castability
                     local overlay = frame.clickOverlay
@@ -2985,8 +3055,7 @@ local function RefreshOverlaySpells()
     for _, frame in pairs(buffFrames) do
         if frame.clickOverlay then
             local category = frame.buffCategory
-            local cs = category and db.categorySettings and db.categorySettings[category]
-            local enabled = cs and cs.clickable == true
+            local enabled = category and IsCategoryClickable(category)
             if enabled and category ~= "consumable" then
                 local overlay = frame.clickOverlay
                 local castableID = GetActionSpellID(frame.buffDef)
@@ -3037,6 +3106,7 @@ CallbackRegistry:RegisterCallback("DisplayRefresh", function()
     -- Refresh consumable action button clickability/visibility after mode changes
     if not InCombatLockdown() then
         UpdateActionButtons("consumable")
+        UpdateActionButtons("pet")
     end
 end)
 
@@ -3368,7 +3438,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 11
+        local DB_VERSION = 12
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -3645,6 +3715,21 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                     db.defaults.consumableDisplayMode = cs.useItemIcons and "icon_only" or "sub_icons"
                 end
             end,
+
+            -- [12] Ensure click-to-cast enabled for raid/pet categories
+            [12] = function()
+                if not db.categorySettings then
+                    db.categorySettings = {}
+                end
+                local function ensureClickable(category)
+                    if not db.categorySettings[category] then
+                        db.categorySettings[category] = {}
+                    end
+                    db.categorySettings[category].clickable = true
+                end
+                ensureClickable("raid")
+                ensureClickable("pet")
+            end,
         }
 
         -- Run pending migrations
@@ -3748,12 +3833,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         InvalidateConsumableCache()
         if not mainFrame then
             InitializeFrames()
-            -- Initialize action buttons for categories with clickable enabled
+            -- Initialize action buttons for all categories (uses defaults when unset)
             for _, cat in ipairs(CATEGORIES) do
-                local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[cat]
-                if cs and cs.clickable then
-                    UpdateActionButtons(cat)
-                end
+                UpdateActionButtons(cat)
             end
         end
         SeedGlowingSpells() -- Catch glows that were active before event registration

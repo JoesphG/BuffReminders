@@ -69,6 +69,21 @@ local cachedSpellKnowledge = {}
 -- Spec ID cache (invalidated on PLAYER_SPECIALIZATION_CHANGED)
 local cachedSpecId = nil
 
+-- Pet summon spell IDs (hunter + other pet classes)
+local HUNTER_CALL_PET_SPELLS = {
+    { spellID = 883, slot = 1 },
+    { spellID = 83242, slot = 2 },
+    { spellID = 83243, slot = 3 },
+    { spellID = 83244, slot = 4 },
+    { spellID = 83245, slot = 5 },
+}
+local HUNTER_REVIVE_PET = 982
+local HUNTER_DISABLE_PETS_SPELL = 1223323
+
+local WARLOCK_PET_SPELLS = { 688, 697, 691, 366222, 30146 }
+local DK_PET_SPELLS = { 46584 }
+local MAGE_PET_SPELLS = { 31687 }
+
 -- Weapon enchant info for current refresh cycle (set once per BuffState.Refresh())
 local currentWeaponEnchants = {
     hasMainHand = false,
@@ -109,6 +124,210 @@ local function IsPlayerSpellCached(spellID)
     local knows = IsPlayerSpell(spellID)
     cachedSpellKnowledge[spellID] = knows
     return knows
+end
+
+local function KnowSpell(spellID)
+    if not spellID then
+        return false
+    end
+    if IsPlayerSpell then
+        return IsPlayerSpell(spellID)
+    end
+    if C_SpellBook and C_SpellBook.IsSpellKnown then
+        return C_SpellBook.IsSpellKnown(spellID)
+    end
+    if IsSpellKnownOrOverridesKnown then
+        return IsSpellKnownOrOverridesKnown(spellID)
+    end
+    if IsSpellKnown then
+        return IsSpellKnown(spellID)
+    end
+    return false
+end
+
+local function IsMMWithoutUnbreakableBond()
+    if playerClass ~= "HUNTER" then
+        return false
+    end
+    local specId = GetPlayerSpecId()
+    if specId ~= 254 then
+        return false
+    end
+    return not KnowSpell(HUNTER_DISABLE_PETS_SPELL)
+end
+
+local function GetStableInfo(slotIndex)
+    if not (C_StableInfo and C_StableInfo.GetStablePetInfo) then
+        return nil
+    end
+    return C_StableInfo.GetStablePetInfo(slotIndex)
+end
+
+local function HunterSlotHasPet(slotIndex)
+    local info = GetStableInfo(slotIndex)
+    if not info then
+        return false
+    end
+    local name = info.name or info.petName or info.customName
+    local creatureId = info.creatureID or info.displayID or info.speciesID or info.petID
+    return (name and name ~= "") or (creatureId and creatureId ~= 0)
+end
+
+local function GetPetFamilyFromStableInfo(info)
+    if not info then
+        return nil
+    end
+    return info.familyName or info.family or info.petFamily or info.type or info.specName
+end
+
+local function GetPetFamilyIconFromStableInfo(info)
+    if not info then
+        return nil
+    end
+    local familyId = info.familyID or info.familyId or info.petFamilyId
+    if familyId and C_PetJournal and C_PetJournal.GetPetFamilyInfo then
+        local _, icon = C_PetJournal.GetPetFamilyInfo(familyId)
+        return icon
+    end
+    return nil
+end
+
+local function AbilityIconForSpec(specID)
+    if specID == 79 then
+        return 348567
+    end -- Cunning
+    if specID == 74 then
+        return 136224
+    end -- Ferocity
+    if specID == 81 then
+        return 571585
+    end -- Tenacity
+    return nil
+end
+
+local function HasUsablePet()
+    if not UnitExists("pet") then
+        return false
+    end
+    if UnitIsDeadOrGhost and UnitIsDeadOrGhost("pet") then
+        return false
+    end
+    if UnitIsVisible and not UnitIsVisible("pet") then
+        return false
+    end
+    return true
+end
+
+local function HasWarlockSacrificeBuff()
+    local SACRIFICE_BUFF = 196099
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        return C_UnitAuras.GetPlayerAuraBySpellID(SACRIFICE_BUFF) ~= nil
+    end
+    local i = 1
+    while true do
+        local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+        if not a then
+            break
+        end
+        if a.spellId == SACRIFICE_BUFF then
+            return true
+        end
+        i = i + 1
+    end
+    return false
+end
+
+local function BuildPetActionItemsForBuff(buff)
+    if not buff then
+        return nil
+    end
+    if buff.key ~= "hunterPet" and buff.key ~= "warlockPet" and buff.key ~= "unholyPet" and buff.key ~= "frostMagePet" then
+        return nil
+    end
+    if InCombatLockdown() then
+        return nil
+    end
+    if HasUsablePet() then
+        return nil
+    end
+    if IsMounted and IsMounted() then
+        return nil
+    end
+
+    local items = {}
+
+    if playerClass == "HUNTER" then
+        if IsMMWithoutUnbreakableBond() then
+            return nil
+        end
+
+        for _, entry in ipairs(HUNTER_CALL_PET_SPELLS) do
+            local spellID = entry.spellID
+            local slot = entry.slot
+            if HunterSlotHasPet(slot) then
+                local info = GetStableInfo(slot)
+                local icon = nil
+                local family = nil
+                local familyIcon = nil
+                local hoverIcon = nil
+                if info then
+                    icon = info.icon or info.iconFileID
+                    family = GetPetFamilyFromStableInfo(info)
+                    familyIcon = GetPetFamilyIconFromStableInfo(info)
+                    if info.specID then
+                        hoverIcon = AbilityIconForSpec(info.specID)
+                    end
+                end
+                if not icon and C_Spell and C_Spell.GetSpellTexture then
+                    icon = C_Spell.GetSpellTexture(spellID)
+                end
+                items[#items + 1] = {
+                    spellID = spellID,
+                    icon = icon,
+                    petFamily = family,
+                    petFamilyIcon = familyIcon,
+                    hoverIcon = hoverIcon,
+                }
+            end
+        end
+
+        if KnowSpell(HUNTER_REVIVE_PET) then
+            local reviveIcon = nil
+            if C_Spell and C_Spell.GetSpellTexture then
+                reviveIcon = C_Spell.GetSpellTexture(HUNTER_REVIVE_PET)
+            end
+            items[#items + 1] = {
+                spellID = HUNTER_REVIVE_PET,
+                icon = reviveIcon,
+            }
+        end
+    elseif playerClass == "WARLOCK" then
+        if HasWarlockSacrificeBuff() then
+            return nil
+        end
+        for _, spellID in ipairs(WARLOCK_PET_SPELLS) do
+            if KnowSpell(spellID) then
+                items[#items + 1] = { spellID = spellID }
+            end
+        end
+    elseif playerClass == "DEATHKNIGHT" then
+        for _, spellID in ipairs(DK_PET_SPELLS) do
+            if KnowSpell(spellID) then
+                items[#items + 1] = { spellID = spellID }
+            end
+        end
+    elseif playerClass == "MAGE" then
+        for _, spellID in ipairs(MAGE_PET_SPELLS) do
+            if KnowSpell(spellID) then
+                items[#items + 1] = { spellID = spellID }
+            end
+        end
+    end
+
+    if #items == 0 then
+        return nil
+    end
+    return items
 end
 
 -- ============================================================================
@@ -952,6 +1171,7 @@ function BuffState.Refresh()
                 entry.displayType = "missing"
                 entry.missingText = buff.missingText
                 entry.iconByRole = buff.iconByRole
+                entry.actionItems = BuildPetActionItemsForBuff(buff)
             end
         end
     end
