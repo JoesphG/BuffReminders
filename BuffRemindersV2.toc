@@ -2,16 +2,17 @@
 ## Title: BuffRemindersV2
 ## Notes: Track missing buffs at a glance
 ## Author: zerbi
-## Version: @project-version@
+## Version: v2.0.11
 ## SavedVariables: BuffRemindersV2DB
 ## X-Curse-Project-ID: 1441094
 ## X-Wago-ID: qGYZZjNg
-## OptionalDeps: Masque
+## OptionalDeps: Masque, LibCustomGlow-1.0
 ## IconTexture: Interface\AddOns\BuffRemindersV2\icon.tga
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
 Libs\LibSharedMedia-3.0\lib.xml
+Libs\LibCustomGlow-1.0\LibCustomGlow-1.0.lua
 
 Core.lua
 Buffs.lua

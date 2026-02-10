@@ -6,6 +6,7 @@ local DEFAULT_ICON_ZOOM = BR.DEFAULT_ICON_ZOOM
 
 -- LibSharedMedia for font resolution
 local LSM = LibStub("LibSharedMedia-3.0")
+local LCG = LibStub("LibCustomGlow-1.0", true)
 
 -- Masque integration (optional)
 local Masque = LibStub("Masque", true)
@@ -478,96 +479,147 @@ local UpdateDisplay, UpdateAnchor, ToggleTestMode, RefreshTestDisplay
 local UpdateFallbackDisplay
 
 -- Glow style definitions
-local GlowStyles = {
-    {
-        name = "Orange",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -4, 4)
-            glow:SetPoint("BOTTOMRIGHT", 4, -4)
-            glow:SetAtlas("bags-glow-orange")
-            glow:SetAlpha(0.8)
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(0.8)
-            fade:SetToAlpha(0.3)
-            fade:SetDuration(0.5)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "Gold",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -3, 3)
-            glow:SetPoint("BOTTOMRIGHT", 3, -3)
-            glow:SetAtlas("loottoast-itemborder-gold")
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(1)
-            fade:SetToAlpha(0.4)
-            fade:SetDuration(0.6)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "Yellow",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -6, 6)
-            glow:SetPoint("BOTTOMRIGHT", 6, -6)
-            glow:SetAtlas("bags-glow-white")
-            glow:SetVertexColor(1, 0.8, 0)
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(0.9)
-            fade:SetToAlpha(0.2)
-            fade:SetDuration(0.5)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "White",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -6, 6)
-            glow:SetPoint("BOTTOMRIGHT", 6, -6)
-            glow:SetAtlas("bags-glow-white")
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(0.9)
-            fade:SetToAlpha(0.2)
-            fade:SetDuration(0.5)
-            frame.glowAnim = ag
-        end,
-    },
-    {
-        name = "Red",
-        setup = function(frame)
-            local glow = frame:CreateTexture(nil, "OVERLAY")
-            glow:SetPoint("TOPLEFT", -5, 5)
-            glow:SetPoint("BOTTOMRIGHT", 5, -5)
-            glow:SetAtlas("bags-glow-white")
-            glow:SetVertexColor(1, 0.2, 0.2)
-            frame.glowTexture = glow
-            local ag = glow:CreateAnimationGroup()
-            ag:SetLooping("BOUNCE")
-            local fade = ag:CreateAnimation("Alpha")
-            fade:SetFromAlpha(1)
-            fade:SetToAlpha(0.1)
-            fade:SetDuration(0.3)
-            frame.glowAnim = ag
-        end,
-    },
-}
+local GlowStyles = {}
+if LCG then
+    GlowStyles = {
+        {
+            name = "Orange",
+            start = function(frame)
+                LCG.ButtonGlow_Start(frame, { 1, 0.6, 0.2, 1 }, 0.12)
+            end,
+            stop = function(frame)
+                LCG.ButtonGlow_Stop(frame)
+            end,
+        },
+        {
+            name = "Gold",
+            start = function(frame)
+                LCG.ButtonGlow_Start(frame, { 1, 0.85, 0.2, 1 }, 0.12)
+            end,
+            stop = function(frame)
+                LCG.ButtonGlow_Stop(frame)
+            end,
+        },
+        {
+            name = "Yellow",
+            start = function(frame)
+                LCG.PixelGlow_Start(frame, { 1, 0.8, 0, 1 }, 8, 0.15, 8, 2, 0, 0, true)
+            end,
+            stop = function(frame)
+                LCG.PixelGlow_Stop(frame)
+            end,
+        },
+        {
+            name = "White",
+            start = function(frame)
+                LCG.PixelGlow_Start(frame, { 1, 1, 1, 1 }, 8, 0.15, 8, 2, 0, 0, true)
+            end,
+            stop = function(frame)
+                LCG.PixelGlow_Stop(frame)
+            end,
+        },
+        {
+            name = "Red",
+            start = function(frame)
+                LCG.PixelGlow_Start(frame, { 1, 0.2, 0.2, 1 }, 8, 0.15, 8, 2, 0, 0, true)
+            end,
+            stop = function(frame)
+                LCG.PixelGlow_Stop(frame)
+            end,
+        },
+    }
+else
+    GlowStyles = {
+        {
+            name = "Orange",
+            setup = function(frame)
+                local glow = frame:CreateTexture(nil, "OVERLAY")
+                glow:SetPoint("TOPLEFT", -4, 4)
+                glow:SetPoint("BOTTOMRIGHT", 4, -4)
+                glow:SetAtlas("bags-glow-orange")
+                glow:SetAlpha(0.8)
+                frame.glowTexture = glow
+                local ag = glow:CreateAnimationGroup()
+                ag:SetLooping("BOUNCE")
+                local fade = ag:CreateAnimation("Alpha")
+                fade:SetFromAlpha(0.8)
+                fade:SetToAlpha(0.3)
+                fade:SetDuration(0.5)
+                frame.glowAnim = ag
+            end,
+        },
+        {
+            name = "Gold",
+            setup = function(frame)
+                local glow = frame:CreateTexture(nil, "OVERLAY")
+                glow:SetPoint("TOPLEFT", -3, 3)
+                glow:SetPoint("BOTTOMRIGHT", 3, -3)
+                glow:SetAtlas("loottoast-itemborder-gold")
+                frame.glowTexture = glow
+                local ag = glow:CreateAnimationGroup()
+                ag:SetLooping("BOUNCE")
+                local fade = ag:CreateAnimation("Alpha")
+                fade:SetFromAlpha(1)
+                fade:SetToAlpha(0.4)
+                fade:SetDuration(0.6)
+                frame.glowAnim = ag
+            end,
+        },
+        {
+            name = "Yellow",
+            setup = function(frame)
+                local glow = frame:CreateTexture(nil, "OVERLAY")
+                glow:SetPoint("TOPLEFT", -6, 6)
+                glow:SetPoint("BOTTOMRIGHT", 6, -6)
+                glow:SetAtlas("bags-glow-white")
+                glow:SetVertexColor(1, 0.8, 0)
+                frame.glowTexture = glow
+                local ag = glow:CreateAnimationGroup()
+                ag:SetLooping("BOUNCE")
+                local fade = ag:CreateAnimation("Alpha")
+                fade:SetFromAlpha(0.9)
+                fade:SetToAlpha(0.2)
+                fade:SetDuration(0.5)
+                frame.glowAnim = ag
+            end,
+        },
+        {
+            name = "White",
+            setup = function(frame)
+                local glow = frame:CreateTexture(nil, "OVERLAY")
+                glow:SetPoint("TOPLEFT", -6, 6)
+                glow:SetPoint("BOTTOMRIGHT", 6, -6)
+                glow:SetAtlas("bags-glow-white")
+                frame.glowTexture = glow
+                local ag = glow:CreateAnimationGroup()
+                ag:SetLooping("BOUNCE")
+                local fade = ag:CreateAnimation("Alpha")
+                fade:SetFromAlpha(0.9)
+                fade:SetToAlpha(0.2)
+                fade:SetDuration(0.5)
+                frame.glowAnim = ag
+            end,
+        },
+        {
+            name = "Red",
+            setup = function(frame)
+                local glow = frame:CreateTexture(nil, "OVERLAY")
+                glow:SetPoint("TOPLEFT", -5, 5)
+                glow:SetPoint("BOTTOMRIGHT", 5, -5)
+                glow:SetAtlas("bags-glow-white")
+                glow:SetVertexColor(1, 0.2, 0.2)
+                frame.glowTexture = glow
+                local ag = glow:CreateAnimationGroup()
+                ag:SetLooping("BOUNCE")
+                local fade = ag:CreateAnimation("Alpha")
+                fade:SetFromAlpha(1)
+                fade:SetToAlpha(0.1)
+                fade:SetDuration(0.3)
+                frame.glowAnim = ag
+            end,
+        },
+    }
+end
 
 -- Export for Options.lua (ShowGlowDemo)
 BR.GlowStyles = GlowStyles
@@ -580,6 +632,12 @@ local function SetExpirationGlow(frame, show)
     if show then
         if not frame.glowShowing or frame.currentGlowStyle ~= styleIndex then
             -- Clean up old glow if style changed
+            if frame.currentGlowStyle then
+                local oldStyle = GlowStyles[frame.currentGlowStyle]
+                if oldStyle and oldStyle.stop then
+                    oldStyle.stop(frame)
+                end
+            end
             if frame.glowAnim then
                 frame.glowAnim:Stop()
             end
@@ -593,19 +651,27 @@ local function SetExpirationGlow(frame, show)
             -- Setup new glow style
             local style = GlowStyles[styleIndex]
             if style then
-                style.setup(frame)
+                if style.start then
+                    style.start(frame)
+                elseif style.setup then
+                    style.setup(frame)
+                    if frame.glowTexture then
+                        frame.glowTexture:Show()
+                    end
+                    if frame.glowAnim then
+                        frame.glowAnim:Play()
+                    end
+                end
                 frame.currentGlowStyle = styleIndex
-                if frame.glowTexture then
-                    frame.glowTexture:Show()
-                end
-                if frame.glowAnim then
-                    frame.glowAnim:Play()
-                end
             end
             frame.glowShowing = true
         end
     else
         if frame.glowShowing then
+            local style = GlowStyles[frame.currentGlowStyle]
+            if style and style.stop then
+                style.stop(frame)
+            end
             if frame.glowAnim then
                 frame.glowAnim:Stop()
             end
@@ -781,9 +847,16 @@ local function CreateActionButton(parent)
     btn.missingText:Hide()
 
     btn:SetScript("OnEnter", function(self)
-        if self.itemID then
+        if self.itemID or self.spellID then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetItemByID(self.itemID)
+            if self.itemID then
+                GameTooltip:SetItemByID(self.itemID)
+            elseif self.spellID then
+                GameTooltip:SetSpellByID(self.spellID)
+                if self.petFamily then
+                    GameTooltip:AddLine("Pet Family: " .. self.petFamily, 0.8, 0.8, 0.8)
+                end
+            end
             GameTooltip:Show()
         end
     end)
@@ -911,9 +984,16 @@ local function EnsureMainActionButton(frame)
     btn:SetFrameLevel(frame:GetFrameLevel() + 5)
 
     btn:SetScript("OnEnter", function(self)
-        if self.itemID then
+        if self.itemID or self.spellID then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetItemByID(self.itemID)
+            if self.itemID then
+                GameTooltip:SetItemByID(self.itemID)
+            elseif self.spellID then
+                GameTooltip:SetSpellByID(self.spellID)
+                if self.petFamily then
+                    GameTooltip:AddLine("Pet Family: " .. self.petFamily, 0.8, 0.8, 0.8)
+                end
+            end
             GameTooltip:Show()
         end
     end)
@@ -967,17 +1047,34 @@ local function UpdateConsumableButtons(frame, actionItems)
         end
 
         btn.itemID = item.itemID
-        local iconTexture = item.icon or 134400
+        btn.spellID = item.spellID
+        btn.petFamily = item.petFamily
+        local iconTexture = item.icon
+        if not iconTexture then
+            if item.spellID then
+                iconTexture = GetSpellTexture(item.spellID) or 134400
+            else
+                iconTexture = 134400
+            end
+        end
         if frame.buffCategory == "consumable" and frame.key == "food" and IsFoodEatingActive(item.itemID) then
             iconTexture = FOOD_EATING_ICON
         end
         btn.icon:SetTexture(iconTexture)
-        btn.count:SetText(item.count > 1 and tostring(item.count) or "")
+        local count = item.count or 0
+        btn.count:SetText(count > 1 and tostring(count) or "")
         btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
         btn.missingText:Hide()
         UpdateActionButtonStyling(btn, catSettings)
 
-        if btn._br_action_item ~= item.itemID then
+        if item.spellID then
+            if btn._br_action_spell ~= item.spellID then
+                btn:SetAttribute("type", "spell")
+                btn:SetAttribute("spell", item.spellID)
+                btn._br_action_spell = item.spellID
+                btn._br_action_item = nil
+            end
+        elseif btn._br_action_item ~= item.itemID then
             if frame.buffCategory == "consumable" and frame.key == "weaponBuff" then
                 btn:SetAttribute("type", "macro")
                 btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
@@ -986,6 +1083,7 @@ local function UpdateConsumableButtons(frame, actionItems)
                 btn:SetAttribute("item", "item:" .. tostring(item.itemID))
             end
             btn._br_action_item = item.itemID
+            btn._br_action_spell = nil
         end
 
         btn:Show()
@@ -1029,6 +1127,10 @@ local function UpdateActionButtons(frame, actionItems, actionSpellID)
 
     if actionItems and #actionItems > 0 then
         UpdateConsumableButtons(frame, actionItems)
+        -- Make sure sub-icons show for pet summon lists as well as consumables.
+        if frame.actionHolder then
+            frame.actionHolder:Show()
+        end
         local item = actionItems[1]
         if not item then
             if frame.actionMainButton then
@@ -1044,8 +1146,17 @@ local function UpdateActionButtons(frame, actionItems, actionSpellID)
 
         local btn = EnsureMainActionButton(frame)
         btn.itemID = item.itemID
+        btn.spellID = item.spellID
+        btn.petFamily = item.petFamily
 
-        if btn._br_action_item ~= item.itemID then
+        if item.spellID then
+            if btn._br_action_spell ~= item.spellID then
+                btn:SetAttribute("type", "spell")
+                btn:SetAttribute("spell", item.spellID)
+                btn._br_action_spell = item.spellID
+                btn._br_action_item = nil
+            end
+        elseif btn._br_action_item ~= item.itemID then
             if frame.buffCategory == "consumable" and frame.key == "weaponBuff" then
                 btn:SetAttribute("type", "macro")
                 btn:SetAttribute("macrotext", "/use item:" .. tostring(item.itemID) .. "\n/use 16")
@@ -2745,6 +2856,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
 
         SLASH_BUFFREMINDERSV2_1 = "/brv2"
         SLASH_BUFFREMINDERSV2_2 = "/buffremindersv2"
+        SLASH_BUFFREMINDERSV2_3 = "/br"
+        SLASH_BUFFREMINDERSV2_4 = "/buffreminders"
         SlashCmdList["BUFFREMINDERSV2"] = SlashHandler
 
         -- Register with WoW's Interface Options
