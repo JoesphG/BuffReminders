@@ -2,7 +2,7 @@
 ## Title: BuffRemindersv2
 ## Notes: Track missing buffs at a glance
 ## Author: zerbi
-## Version: v3.0.1
+## Version: v3.0.2
 ## SavedVariables: BuffRemindersV2DB
 ## X-Curse-Project-ID: 1441094
 ## X-Wago-ID: qGYZZjNg

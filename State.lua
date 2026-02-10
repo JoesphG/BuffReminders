@@ -241,7 +241,12 @@ local function BuildPetActionItemsForBuff(buff)
     if not buff then
         return nil
     end
-    if buff.key ~= "hunterPet" and buff.key ~= "warlockPet" and buff.key ~= "unholyPet" and buff.key ~= "frostMagePet" then
+    if
+        buff.key ~= "hunterPet"
+        and buff.key ~= "warlockPet"
+        and buff.key ~= "unholyPet"
+        and buff.key ~= "frostMagePet"
+    then
         return nil
     end
     if InCombatLockdown() then
@@ -339,11 +344,21 @@ end
 ---@param unit string
 ---@return boolean
 local function IsValidGroupMember(unit)
-    return UnitExists(unit)
-        and not UnitIsDeadOrGhost(unit)
-        and UnitIsConnected(unit)
-        and UnitCanAssist("player", unit)
-        and UnitIsVisible(unit)
+    if not (UnitExists(unit) and UnitCanAssist("player", unit) and UnitIsConnected(unit) and UnitIsVisible(unit)) then
+        return false
+    end
+    if UnitIsDeadOrGhost(unit) then
+        return false
+    end
+    if BuffRemindersDB and BuffRemindersDB.limitToInRange and not UnitIsUnit(unit, "player") then
+        if UnitInRange then
+            local inRange = UnitInRange(unit)
+            if inRange == false then
+                return false
+            end
+        end
+    end
+    return true
 end
 
 ---Iterate over valid group members, calling callback(unit) for each

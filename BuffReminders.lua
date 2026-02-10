@@ -132,6 +132,8 @@ local defaults = {
     showOnlyPlayerClassBuff = false,
     showOnlyPlayerMissing = false,
     showOnlyOnReadyCheck = false,
+    hideInCombat = false,
+    limitToInRange = false,
     hidePetWhileMounted = true,
     petPassiveOnlyInCombat = false,
     readyCheckDuration = 15, -- seconds
@@ -829,6 +831,10 @@ local function GetActionSpellID(buff)
     return GetCastableSpellID(buff.spellID)
 end
 
+local function IsMythicPlusActive()
+    return C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive and C_ChallengeMode.IsChallengeModeActive()
+end
+
 -- Create a SecureActionButton overlay for click-to-cast on a buff frame.
 -- Parented to UIParent with NO anchors to the buff frame hierarchy, avoiding any
 -- layout dependency that would make the frame hierarchy protected/secure.
@@ -945,7 +951,7 @@ local function CreateActionButton()
             GameTooltip:Show()
         end
     end)
-    btn:SetScript("OnLeave", function()
+    btn:SetScript("OnLeave", function(self)
         if self._br_base_icon and self.icon then
             self.icon:SetTexture(self._br_base_icon)
             self._br_base_icon = nil
@@ -957,7 +963,7 @@ local function CreateActionButton()
             GameTooltip:Hide()
         end
     end)
-    btn:SetScript("OnHide", function()
+    btn:SetScript("OnHide", function(self)
         if self._br_base_icon and self.icon then
             self.icon:SetTexture(self._br_base_icon)
             self._br_base_icon = nil
@@ -1160,6 +1166,37 @@ end
 -- Safe to call at any time; skips if in combat lockdown.
 local function SyncSecureButtons()
     if InCombatLockdown() then
+        return
+    end
+    if IsMythicPlusActive() then
+        for _, frame in pairs(buffFrames) do
+            local overlay = frame.clickOverlay
+            if overlay then
+                overlay:EnableMouse(false)
+                overlay:Hide()
+                overlay._br_left = nil
+            end
+            if frame.actionButtons then
+                for _, btn in ipairs(frame.actionButtons) do
+                    if btn._br_driver_active then
+                        RegisterStateDriver(btn, "visibility", "hide")
+                        btn._br_driver_active = false
+                        btn._br_x = nil
+                    end
+                    btn:Hide()
+                end
+            end
+            if frame.extraFrames then
+                for _, extra in ipairs(frame.extraFrames) do
+                    local extraOverlay = extra.clickOverlay
+                    if extraOverlay then
+                        extraOverlay:EnableMouse(false)
+                        extraOverlay:Hide()
+                        extraOverlay._br_left = nil
+                    end
+                end
+            end
+        end
         return
     end
     for _, frame in pairs(buffFrames) do
@@ -2113,11 +2150,9 @@ UpdateDisplay = function()
         return
     end
 
-    -- Early exit: can't check buffs when dead, in combat, M+, instanced PvP, or player housing
+    -- Early exit: can't check buffs when dead, in combat, active M+, instanced PvP, or player housing
     local _, instanceType = IsInInstance()
-    local inMythicPlus = C_ChallengeMode
-        and C_ChallengeMode.IsChallengeModeActive
-        and C_ChallengeMode.IsChallengeModeActive()
+    local inMythicPlus = IsMythicPlusActive()
     local inHousing = C_Housing
         and (
             (C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot())
@@ -2135,6 +2170,12 @@ UpdateDisplay = function()
             UpdateFallbackDisplay()
             ScheduleSecureSync()
         end
+        return
+    end
+
+    -- Hide in combat if configured
+    if BuffRemindersDB.hideInCombat and combatCheck then
+        HideAllDisplayFrames()
         return
     end
 
@@ -2928,6 +2969,37 @@ local function UpdateActionButtons(category)
     if InCombatLockdown() then
         return
     end
+    if IsMythicPlusActive() then
+        for _, frame in pairs(buffFrames) do
+            if frame.buffCategory == category then
+                if frame.clickOverlay then
+                    frame.clickOverlay:EnableMouse(false)
+                    frame.clickOverlay:Hide()
+                    frame.clickOverlay._br_left = nil
+                end
+                if frame.actionButtons then
+                    for _, btn in ipairs(frame.actionButtons) do
+                        if btn._br_driver_active then
+                            RegisterStateDriver(btn, "visibility", "hide")
+                            btn._br_driver_active = false
+                            btn._br_x = nil
+                        end
+                        btn:Hide()
+                    end
+                end
+                if frame.extraFrames then
+                    for _, extra in ipairs(frame.extraFrames) do
+                        if extra.clickOverlay then
+                            extra.clickOverlay:EnableMouse(false)
+                            extra.clickOverlay:Hide()
+                            extra.clickOverlay._br_left = nil
+                        end
+                    end
+                end
+            end
+        end
+        return
+    end
 
     local db = BuffRemindersDB
     local enabled = IsCategoryClickable(category)
@@ -3065,7 +3137,6 @@ local function RefreshOverlaySpells()
         return
     end
 
-    local db = BuffRemindersDB
     for _, frame in pairs(buffFrames) do
         if frame.clickOverlay then
             local category = frame.buffCategory
@@ -3325,6 +3396,7 @@ function BuffReminders:Import(importString, profileKey)
     return ImportSettings(dataString)
 end
 
+---@diagnostic disable-next-line: duplicate-set-field
 function BuffRemindersV2:Export(profileKey)
     local exportString, err = ExportSettings()
     if not exportString then
@@ -3333,6 +3405,7 @@ function BuffRemindersV2:Export(profileKey)
     return EXPORT_PREFIX_V2 .. exportString
 end
 
+---@diagnostic disable-next-line: duplicate-set-field
 function BuffRemindersV2:Import(importString, profileKey)
     return BuffReminders:Import(importString, profileKey)
 end

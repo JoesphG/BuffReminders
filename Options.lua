@@ -415,9 +415,9 @@ local function CreateOptionsPanel()
     end
 
     -- Create buff checkbox using Components.Checkbox
-    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, displayName, infoTooltip, iconOverride)
+    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, buffDisplayName, infoTooltip, iconOverride)
         local holder = Components.Checkbox(parent, {
-            label = displayName,
+            label = buffDisplayName,
             icons = ResolveBuffIcons(iconOverride, spellIDs),
             infoTooltip = infoTooltip,
             get = function()
@@ -1508,6 +1508,98 @@ local function CreateOptionsPanel()
     local setX = COL_PADDING
     local setLayout = Components.VerticalLayout(settingsContent, { x = setX, y = -10 })
 
+    -- Visibility Presets section
+    LayoutSectionHeader(setLayout, settingsContent, "Visibility Presets")
+
+    local function ApplyVisibilityPreset(preset)
+        BuffRemindersDB.showOnlyInGroup = preset.showOnlyInGroup
+        BuffRemindersDB.hideWhileResting = preset.hideWhileResting
+        BuffRemindersDB.showOnlyOnReadyCheck = preset.showOnlyOnReadyCheck
+        BuffRemindersDB.hideInCombat = preset.hideInCombat
+        BuffRemindersDB.limitToInRange = preset.limitToInRange
+        BuffRemindersDB.hidePetWhileMounted = preset.hidePetWhileMounted
+        BuffRemindersDB.petPassiveOnlyInCombat = preset.petPassiveOnlyInCombat
+        UpdateDisplay()
+        Components.RefreshAll()
+    end
+
+    local presetHolder = CreateFrame("Frame", nil, settingsContent)
+    presetHolder:SetSize(PANEL_WIDTH - COL_PADDING * 2, 24)
+    setLayout:Add(presetHolder, 24, COMPONENT_GAP)
+
+    local presets = {
+        {
+            label = "Relaxed",
+            tooltip = "Show everywhere with minimal restrictions",
+            values = {
+                showOnlyInGroup = false,
+                hideWhileResting = false,
+                showOnlyOnReadyCheck = false,
+                hideInCombat = false,
+                limitToInRange = false,
+                hidePetWhileMounted = false,
+                petPassiveOnlyInCombat = false,
+            },
+        },
+        {
+            label = "Group",
+            tooltip = "Group-only visibility, hides in cities/resting",
+            values = {
+                showOnlyInGroup = true,
+                hideWhileResting = true,
+                showOnlyOnReadyCheck = false,
+                hideInCombat = false,
+                limitToInRange = true,
+                hidePetWhileMounted = true,
+                petPassiveOnlyInCombat = true,
+            },
+        },
+        {
+            label = "Ready Check",
+            tooltip = "Only show during ready checks",
+            values = {
+                showOnlyInGroup = true,
+                hideWhileResting = true,
+                showOnlyOnReadyCheck = true,
+                hideInCombat = false,
+                limitToInRange = true,
+                hidePetWhileMounted = true,
+                petPassiveOnlyInCombat = true,
+            },
+        },
+        {
+            label = "Out of Combat",
+            tooltip = "Hide all reminders while in combat",
+            values = {
+                showOnlyInGroup = false,
+                hideWhileResting = false,
+                showOnlyOnReadyCheck = false,
+                hideInCombat = true,
+                limitToInRange = false,
+                hidePetWhileMounted = false,
+                petPassiveOnlyInCombat = false,
+            },
+        },
+    }
+
+    local prevPresetBtn = nil
+    for _, preset in ipairs(presets) do
+        local btn = CreateButton(presetHolder, preset.label, function()
+            ApplyVisibilityPreset(preset.values)
+        end, {
+            title = "Preset: " .. preset.label,
+            desc = preset.tooltip,
+        })
+        if prevPresetBtn then
+            btn:SetPoint("LEFT", prevPresetBtn, "RIGHT", 8, 0)
+        else
+            btn:SetPoint("LEFT", 0, 0)
+        end
+        prevPresetBtn = btn
+    end
+
+    setLayout:Space(SECTION_GAP)
+
     -- General Settings section
     LayoutSectionHeader(setLayout, settingsContent, "Display Behavior")
 
@@ -1535,6 +1627,19 @@ local function CreateOptionsPanel()
         end,
     })
     setLayout:Add(restingHolder, nil, COMPONENT_GAP)
+
+    local combatHideHolder = Components.Checkbox(settingsContent, {
+        label = "Hide while in combat",
+        get = function()
+            return BuffRemindersDB.hideInCombat == true
+        end,
+        tooltip = { title = "Hide while in combat", desc = "Hide all reminders while you are in combat" },
+        onChange = function(checked)
+            BuffRemindersDB.hideInCombat = checked
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(combatHideHolder, nil, COMPONENT_GAP)
 
     local readyCheckHolder = Components.Checkbox(settingsContent, {
         label = "Show only on ready check",
@@ -1569,6 +1674,22 @@ local function CreateOptionsPanel()
     setLayout:SetX(setX + 20)
     setLayout:Add(readyDurationHolder, nil, COMPONENT_GAP)
     setLayout:SetX(setX)
+
+    local rangeHolder = Components.Checkbox(settingsContent, {
+        label = "Only count in-range group members",
+        get = function()
+            return BuffRemindersDB.limitToInRange == true
+        end,
+        tooltip = {
+            title = "Only count in-range group members",
+            desc = "Ignore out-of-range units when checking group buffs. Can reduce updates in large groups.",
+        },
+        onChange = function(checked)
+            BuffRemindersDB.limitToInRange = checked
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(rangeHolder, nil, COMPONENT_GAP)
 
     local playerClassHolder = Components.Checkbox(settingsContent, {
         label = "Show only my class buffs",
@@ -2264,9 +2385,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
         local spellIDValue = #validatedIDs == 1 and validatedIDs[1] or validatedIDs
         local key = existingKey or GenerateCustomBuffKey(spellIDValue)
-        local displayName = nameBox:GetText()
-        if displayName == "" then
-            displayName = firstName or ("Spell " .. validatedIDs[1])
+        local customName = nameBox:GetText()
+        if customName == "" then
+            customName = firstName or ("Spell " .. validatedIDs[1])
         end
 
         local missingTextValue = strtrim(missingBox:GetText())
@@ -2279,7 +2400,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         local customBuff = {
             spellID = spellIDValue,
             key = key,
-            name = displayName,
+            name = customName,
             missingText = missingTextValue,
             class = classDropdownHolder:GetValue(),
             requireSpecId = specDropdownHolder and specDropdownHolder:GetValue() or nil,

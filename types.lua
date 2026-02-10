@@ -234,6 +234,7 @@
 ---@field iconByRole table<RoleType,number>? -- Role-based icon override
 ---@field rebuffWarning boolean?             -- Consumable rebuff pulsing border?
 ---@field isEating boolean?                 -- Food entry: player is currently eating
+---@field actionItems table[]?              -- Optional action items (pet call/revive list)
 
 ---@class BuffRemindersDB
 ---@field dbVersion? integer

@@ -64,8 +64,9 @@ BR.Config.DebugMode = false
 local RootSettings = {
     splitCategories = "FramesReparent",
     frameLocked = nil, -- No refresh needed
-    hideInCombat = nil,
+    hideInCombat = "DisplayRefresh",
     showOnlyInGroup = nil,
+    limitToInRange = "DisplayRefresh",
     position = nil, -- Table with x, y
 }
 
@@ -154,6 +155,7 @@ local function ValidatePath(segments)
     local isRootSetting = root == "frameLocked"
         or root == "hideInCombat"
         or root == "showOnlyInGroup"
+        or root == "limitToInRange"
         or root == "position"
     if isRootSetting then
         if #segments == 1 then
