@@ -952,6 +952,20 @@ local function CreateActionButton()
         end
         GameTooltip:Hide()
     end)
+    btn:SetScript("OnUpdate", function(self)
+        if GameTooltip:IsOwned(self) and not self:IsMouseOver() then
+            GameTooltip:Hide()
+        end
+    end)
+    btn:SetScript("OnHide", function()
+        if self._br_base_icon and self.icon then
+            self.icon:SetTexture(self._br_base_icon)
+            self._br_base_icon = nil
+        end
+        if GameTooltip:IsOwned(self) then
+            GameTooltip:Hide()
+        end
+    end)
 
     return btn
 end
