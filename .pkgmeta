@@ -1,0 +1,15 @@
+ignore:
+  - images
+  - ignored
+  - .github
+  - .gitignore
+  - .claude
+  - .luacheckrc
+  - .luarc.json
+  - .styluaignore
+  - stylua.toml
+  - Makefile
+  - README.md
+  - CURSEFORGE.md
+  - CLAUDE.md
+  - types.lua

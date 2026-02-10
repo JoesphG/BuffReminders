@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Package and Release
+        uses: BigWigsMods/packager@v2.5.0
+        env:
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+          # WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
+
+      - name: Post to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          CHANGELOG=$(gh release view "$TAG" --json body -q '.body' | sed 's/\r//g')
+          CHANGELOG_ESCAPED=$(echo "$CHANGELOG" | jq -Rs .)
+
+          curl -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"BuffRemindersV2 $TAG Released\", \"description\": $CHANGELOG_ESCAPED, \"color\": 5814783, \"url\": \"https://github.com/zerbiniandrea/BuffRemindersV2/releases/tag/$TAG\"}]}" \
+            "$DISCORD_WEBHOOK"
