@@ -59,7 +59,7 @@ Stored under `BuffRemindersDB.crbParity`:
 
 - `healthstoneThreshold` (default: `1`)
 - `soulstoneThresholdMin` (default: `5`)
-- `durabilityThreshold` (default: `25`)
+- `durabilityThreshold` (default: `30`)
 
 ## Reapply After Upstream Resync
 
