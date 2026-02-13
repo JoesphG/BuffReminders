@@ -17,7 +17,7 @@ local function EnsureParityDB()
         db.soulstoneThresholdMin = 5
     end
     if db.durabilityThreshold == nil then
-        db.durabilityThreshold = 25
+        db.durabilityThreshold = 30
     end
     return db
 end
@@ -267,6 +267,20 @@ local function ProcessHealthstone(db)
         return
     end
 
+    -- Avoid duplicate warlock reminders: if Soulwell is available right now,
+    -- let Soulwell own the action prompt and suppress Healthstone count.
+    if isWarlock and IsPlayerSpell(29893) then
+        local cd = C_Spell.GetSpellCooldown(29893)
+        local start = cd and cd.startTime or 0
+        local dur = cd and cd.duration or 0
+        local enabled = cd and cd.isEnabled
+        local onCD = enabled and start and dur and start > 0 and dur > 1.5 and ((start + dur) > GetTime())
+        if not onCD and charges <= threshold then
+            HideEntry(entry)
+            return
+        end
+    end
+
     if charges <= threshold then
         SetCount(entry, tostring(charges), charges == 0)
         return
@@ -463,55 +477,59 @@ local function ProcessTrinkets()
                     SetMissing(entry, "TRINKET", true)
                 end
             else
-                local hasAny = false
-                local total = 0
-                local auraNameSet = BuildAuraNameSet(row.buffIDs)
-                if IsInRaid() then
-                    for i = 1, GetNumGroupMembers() do
-                        local unit = "raid" .. i
-                        if BR.StateHelpers.IsValidGroupMember and BR.StateHelpers.IsValidGroupMember(unit) then
-                            total = total + 1
-                            local hasAura = GetAuraRemaining(unit, row.buffIDs)
-                            if not hasAura then
-                                hasAura = UnitHasAuraByName(unit, auraNameSet)
-                            end
-                            if hasAura then
-                                hasAny = true
-                                break
-                            end
-                        end
-                    end
-                else
-                    local units = { "player" }
-                    for i = 1, GetNumSubgroupMembers() do
-                        units[#units + 1] = "party" .. i
-                    end
-                    for _, unit in ipairs(units) do
-                        if BR.StateHelpers.IsValidGroupMember and BR.StateHelpers.IsValidGroupMember(unit) then
-                            total = total + 1
-                            local hasAura = GetAuraRemaining(unit, row.buffIDs)
-                            if not hasAura then
-                                hasAura = UnitHasAuraByName(unit, auraNameSet)
-                            end
-                            if hasAura then
-                                hasAny = true
-                                break
-                            end
-                        end
-                    end
-                end
-
-                local required = tonumber(row.requiredCount) or 1
-                if required <= 1 then
-                    if hasAny then
-                        HideEntry(entry)
-                    else
-                        SetCount(entry, "0/" .. tostring(math.max(total, 1)), true)
-                    end
-                elseif not hasAny then
-                    SetCount(entry, "0/" .. tostring(math.max(total, 1)), true)
-                else
+                if GetNumGroupMembers() == 0 then
                     HideEntry(entry)
+                else
+                    local hasAny = false
+                    local total = 0
+                    local auraNameSet = BuildAuraNameSet(row.buffIDs)
+                    if IsInRaid() then
+                        for i = 1, GetNumGroupMembers() do
+                            local unit = "raid" .. i
+                            if BR.StateHelpers.IsValidGroupMember and BR.StateHelpers.IsValidGroupMember(unit) then
+                                total = total + 1
+                                local hasAura = GetAuraRemaining(unit, row.buffIDs)
+                                if not hasAura then
+                                    hasAura = UnitHasAuraByName(unit, auraNameSet)
+                                end
+                                if hasAura then
+                                    hasAny = true
+                                    break
+                                end
+                            end
+                        end
+                    else
+                        local units = { "player" }
+                        for i = 1, GetNumSubgroupMembers() do
+                            units[#units + 1] = "party" .. i
+                        end
+                        for _, unit in ipairs(units) do
+                            if BR.StateHelpers.IsValidGroupMember and BR.StateHelpers.IsValidGroupMember(unit) then
+                                total = total + 1
+                                local hasAura = GetAuraRemaining(unit, row.buffIDs)
+                                if not hasAura then
+                                    hasAura = UnitHasAuraByName(unit, auraNameSet)
+                                end
+                                if hasAura then
+                                    hasAny = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+
+                    local required = tonumber(row.requiredCount) or 1
+                    if required <= 1 then
+                        if hasAny then
+                            HideEntry(entry)
+                        else
+                            SetMissing(entry, "TRINKET", true)
+                        end
+                    elseif not hasAny then
+                        SetCount(entry, "0/" .. tostring(math.max(total, 1)), true)
+                    else
+                        HideEntry(entry)
+                    end
                 end
             end
         end
