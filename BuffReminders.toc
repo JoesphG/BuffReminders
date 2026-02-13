@@ -18,11 +18,14 @@ Core.lua
 Data\Buffs.lua
 Data\ConsumableItems.lua
 Data\Pets.lua
+Extensions\CRBParity\Bootstrap.lua
 State.lua
+Extensions\CRBParity\PostRefresh.lua
 UI\Components.lua
 UI\Glow.lua
 Display\BuffReminders.lua
 Display\ImportExport.lua
 Display\Movers.lua
 Display\SecureButtons.lua
+Extensions\CRBParity\ClickActions.lua
 Options\Options.lua
