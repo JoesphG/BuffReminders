@@ -1,4 +1,4 @@
-# CRB Parity Extension (Standalone)
+# JG Extension (Standalone)
 
 This folder adds feature parity behavior inspired by `ClickableRaidBuffs` while keeping changes mostly additive, so upstream resync is low-friction.
 
@@ -33,7 +33,7 @@ This folder adds feature parity behavior inspired by `ClickableRaidBuffs` while 
 - Supports per-trinket exclusions in settings.
 
 6. Settings controls
-- CRB Parity section in Settings tab for:
+- JG section in Settings tab for:
   - Healthstone threshold
   - Soulstone threshold
   - Repair threshold
@@ -44,10 +44,10 @@ This folder adds feature parity behavior inspired by `ClickableRaidBuffs` while 
 
 ## Files
 
-- `Extensions/CRBParity/Bootstrap.lua`
-- `Extensions/CRBParity/PostRefresh.lua`
-- `Extensions/CRBParity/ClickActions.lua`
-- `Extensions/CRBParity/OptionsSection.lua`
+- `Extensions/JG/Bootstrap.lua`
+- `Extensions/JG/PostRefresh.lua`
+- `Extensions/JG/ClickActions.lua`
+- `Extensions/JG/OptionsSection.lua`
 
 ## TOC Wiring
 
@@ -58,19 +58,19 @@ Core.lua
 Data\Buffs.lua
 Data\ConsumableItems.lua
 Data\Pets.lua
-Extensions\CRBParity\Bootstrap.lua
+Extensions\JG\Bootstrap.lua
 State.lua
-Extensions\CRBParity\PostRefresh.lua
+Extensions\JG\PostRefresh.lua
 Display\SecureButtons.lua
-Extensions\CRBParity\ClickActions.lua
-Extensions\CRBParity\OptionsSection.lua
+Extensions\JG\ClickActions.lua
+Extensions\JG\OptionsSection.lua
 ```
 
 The extension depends on `BR.BUFF_TABLES` and `BR.BuffState`, so it must load after `Data\Buffs.lua` and after `State.lua` for refresh wrapping.
 
 ## SavedVariables Keys
 
-Stored under `BuffRemindersDB.crbParity`:
+Stored under `BuffRemindersDB.jgParity`:
 
 - `healthstoneThreshold` (default: `1`)
 - `soulstoneThresholdMin` (default: `5`)
@@ -84,7 +84,7 @@ Stored under `BuffRemindersDB.crbParity`:
 
 ## Reapply After Upstream Resync
 
-1. Re-add `Extensions/CRBParity/` folder.
+1. Re-add `Extensions/JG/` folder.
 2. Re-add TOC lines shown above.
 3. Reload UI and validate behavior.
 
@@ -99,7 +99,7 @@ Stored under `BuffRemindersDB.crbParity`:
 
 ## Maintenance Notes
 
-- Current trinket rows are defined in `Bootstrap.lua` (`BR.CRBParity.TRINKETS`).
+- Current trinket rows are defined in `Bootstrap.lua` (`BR.JG.TRINKETS`).
 - To add/remove tracked trinkets, edit that table only.
 - Click binding for item-based parity rows is handled in `ClickActions.lua`.
 - Post-refresh logic lives in one place: `PostRefresh.lua`.
