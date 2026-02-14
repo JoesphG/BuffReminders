@@ -4,12 +4,12 @@ if not BR or not BR.SecureButtons or not BR.Display then
     return
 end
 
-BR.CRBParity = BR.CRBParity or {}
+BR.JG = BR.JG or {}
 
-if BR.CRBParity._clickWrapped then
+if BR.JG._clickWrapped then
     return
 end
-BR.CRBParity._clickWrapped = true
+BR.JG._clickWrapped = true
 
 local function EnsureSelfClickableCategory()
     BuffRemindersDB = BuffRemindersDB or {}
@@ -52,7 +52,7 @@ local function EnsureClickOverlay(frame)
 end
 
 local function GetRepairMacroText()
-    local db = BuffRemindersDB and BuffRemindersDB.crbParity
+    local db = BuffRemindersDB and BuffRemindersDB.jgParity
     if not db or db.enableRepairMacro ~= true then
         return nil
     end
@@ -89,13 +89,13 @@ local function ApplyParityItemActions(category)
 
     EnsureSelfClickableCategory()
 
-    local actions = BR.CRBParity.ITEM_ACTIONS or {}
+    local actions = BR.JG.ITEM_ACTIONS or {}
     local repairMacro = GetRepairMacroText()
 
     for _, frame in pairs(BR.Display.frames or {}) do
         if frame and frame.buffCategory == "self" and frame.key and frame:IsShown() then
             local overlay = EnsureClickOverlay(frame)
-            if frame.key == "crbp_repair" and repairMacro then
+            if frame.key == "jg_repair" and repairMacro then
                 overlay:SetAttribute("type", "macro")
                 overlay:SetAttribute("macrotext", repairMacro)
                 overlay:SetAttribute("spell", nil)
@@ -146,8 +146,8 @@ end
 
 -- Core refresh paths can rebuild overlays and clear non-spell actions.
 -- Re-apply parity actions after each display update to keep trinket icons clickable.
-if not BR.CRBParity._displayUpdateWrapped and BR.Display and BR.Display.Update then
-    BR.CRBParity._displayUpdateWrapped = true
+if not BR.JG._displayUpdateWrapped and BR.Display and BR.Display.Update then
+    BR.JG._displayUpdateWrapped = true
     local origDisplayUpdate = BR.Display.Update
     BR.Display.Update = function(...)
         local r = origDisplayUpdate(...)
@@ -159,7 +159,7 @@ if not BR.CRBParity._displayUpdateWrapped and BR.Display and BR.Display.Update t
 end
 
 -- Re-apply on state changes that often rebuild secure overlays.
-if not BR.CRBParity._clickEventFrame then
+if not BR.JG._clickEventFrame then
     local f = CreateFrame("Frame")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
     f:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -170,5 +170,5 @@ if not BR.CRBParity._clickEventFrame then
             ApplyParityItemActions("self")
         end
     end)
-    BR.CRBParity._clickEventFrame = f
+    BR.JG._clickEventFrame = f
 end

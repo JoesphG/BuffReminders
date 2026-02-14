@@ -1,11 +1,11 @@
 local _, BR = ...
 
-BR.CRBParity = BR.CRBParity or {}
-BR.CRBParity.ITEM_ACTIONS = BR.CRBParity.ITEM_ACTIONS or {}
+BR.JG = BR.JG or {}
+BR.JG.ITEM_ACTIONS = BR.JG.ITEM_ACTIONS or {}
 
-BR.CRBParity.TRINKETS = {
+BR.JG.TRINKETS = {
     {
-        key = "crbp_trinket_190958",
+        key = "jg_trinket_190958",
         itemID = 190958, -- So'Leah's Secret Technique
         buffIDs = { 368512 },
         targetBuffID = 386510,
@@ -19,7 +19,7 @@ BR.CRBParity.TRINKETS = {
         name = "So'Leah",
     },
     {
-        key = "crbp_trinket_178742",
+        key = "jg_trinket_178742",
         itemID = 178742, -- Bottled Flayedwing Toxin
         buffIDs = { 345546 },
         check = "player",
@@ -58,42 +58,42 @@ end
 -- Soulwell reminder anchor (visibility logic handled in PostRefresh).
 EnsureInjectedSelfBuff({
     spellID = 29893, -- Ritual of Souls
-    key = "crbp_soulwell",
+    key = "jg_soulwell",
     name = "Soulwell",
     class = "WARLOCK",
     iconOverride = 136194,
     missingText = "SOUL\nWELL",
-    infoTooltip = "CRB Parity|Shows when Soulwell is available and your healthstones are low.",
+    infoTooltip = "JG|Shows when Soulwell is available and your healthstones are low.",
 })
 
 -- Durability/repair reminder anchor (state handled in PostRefresh).
 EnsureInjectedSelfBuff({
     spellID = 0,
-    key = "crbp_repair",
+    key = "jg_repair",
     name = "Repair",
     iconOverride = 136241,
     missingText = "REPAIR",
-    infoTooltip = "CRB Parity|Shows when your equipped durability drops below threshold.",
+    infoTooltip = "JG|Shows when your equipped durability drops below threshold.",
 })
 
 -- Eating timer anchor (state handled in PostRefresh).
 EnsureInjectedSelfBuff({
     spellID = 0,
-    key = "crbp_eating_timer",
+    key = "jg_eating_timer",
     name = "Eating Timer",
     iconOverride = 133950,
     missingText = "EATING",
-    infoTooltip = "CRB Parity|Shows an active countdown while eating.",
+    infoTooltip = "JG|Shows an active countdown while eating.",
 })
 
-for _, row in ipairs(BR.CRBParity.TRINKETS) do
-    BR.CRBParity.ITEM_ACTIONS[row.key] = row.itemID
+for _, row in ipairs(BR.JG.TRINKETS) do
+    BR.JG.ITEM_ACTIONS[row.key] = row.itemID
     EnsureInjectedSelfBuff({
         spellID = 0,
         key = row.key,
         name = row.name,
         iconOverride = GetItemIconSafe(row.itemID, row.fallbackIcon),
         missingText = "TRINKET",
-        infoTooltip = "CRB Parity|Tracks equipped trinket buff coverage.",
+        infoTooltip = "JG|Tracks equipped trinket buff coverage.",
     })
 end
