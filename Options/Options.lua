@@ -2032,7 +2032,7 @@ local function CreateOptionsPanel()
     -- Simple frame (not scrollable) - content fits without scrolling
     local settingsContent = CreateFrame("Frame", nil, panel)
     settingsContent:SetPoint("TOPLEFT", 0, CONTENT_TOP)
-    settingsContent:SetSize(PANEL_WIDTH, 300)
+    settingsContent:SetSize(PANEL_WIDTH, 520)
     settingsContent:Hide()
     contentContainers.settings = settingsContent
 
@@ -2150,6 +2150,18 @@ local function CreateOptionsPanel()
         end,
     })
     setLayout:Add(loginMsgHolder)
+
+    -- Standalone extension hook (keeps extension settings outside core Options logic).
+    if BR.CRBParity and BR.CRBParity.BuildSettingsSection then
+        BR.CRBParity.BuildSettingsSection(settingsContent, setLayout, {
+            Components = Components,
+            LayoutSectionHeader = LayoutSectionHeader,
+            UpdateDisplay = UpdateDisplay,
+            setX = setX,
+            COMPONENT_GAP = COMPONENT_GAP,
+            SECTION_GAP = SECTION_GAP,
+        })
+    end
 
     -- ========== IMPORT/EXPORT TAB ==========
     -- Use simple frame (not scrollable) to avoid nested scroll frame issues with edit boxes

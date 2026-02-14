@@ -7,19 +7,27 @@ BR.CRBParity.TRINKETS = {
     {
         key = "crbp_trinket_190958",
         itemID = 190958, -- So'Leah's Secret Technique
-        buffIDs = { 368512, 386510 },
-        check = "raid",
+        buffIDs = { 368512 },
+        targetBuffID = 386510,
+        check = "player",
+        hideWhenPlayerHasBuff = true,
         requiredCount = 1,
+        expiringThresholdMin = 15,
+        gates = { "group", "rested" },
+        mineOnly = true,
         fallbackIcon = 134400,
-        name = "Trinket Aura (Group)",
+        name = "So'Leah",
     },
     {
         key = "crbp_trinket_178742",
         itemID = 178742, -- Bottled Flayedwing Toxin
         buffIDs = { 345546 },
         check = "player",
+        expiringThresholdMin = 15,
+        gates = { "group", "rested" },
+        mineOnly = true,
         fallbackIcon = 134400,
-        name = "Trinket Aura (Self)",
+        name = "Bottled Toxin",
     },
 }
 
