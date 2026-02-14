@@ -4,12 +4,12 @@ if not BR then
     return
 end
 
-BR.CRBParity = BR.CRBParity or {}
+BR.JG = BR.JG or {}
 
 local function EnsureParityDB()
     BuffRemindersDB = BuffRemindersDB or {}
-    BuffRemindersDB.crbParity = BuffRemindersDB.crbParity or {}
-    local db = BuffRemindersDB.crbParity
+    BuffRemindersDB.jgParity = BuffRemindersDB.jgParity or {}
+    local db = BuffRemindersDB.jgParity
 
     if db.healthstoneThreshold == nil then
         db.healthstoneThreshold = 1
@@ -42,7 +42,7 @@ local function EnsureParityDB()
     return db
 end
 
-BR.CRBParity.BuildSettingsSection = function(settingsContent, setLayout, opts)
+BR.JG.BuildSettingsSection = function(settingsContent, setLayout, opts)
     if not settingsContent or not setLayout or not opts then
         return
     end
@@ -56,7 +56,7 @@ BR.CRBParity.BuildSettingsSection = function(settingsContent, setLayout, opts)
 
     EnsureParityDB()
 
-    LayoutSectionHeader(setLayout, settingsContent, "CRB Parity")
+    LayoutSectionHeader(setLayout, settingsContent, "JG")
 
     local hsHolder = Components.Slider(settingsContent, {
         label = "Healthstone",
@@ -198,7 +198,7 @@ BR.CRBParity.BuildSettingsSection = function(settingsContent, setLayout, opts)
     })
     setLayout:Add(repairMacroEnableHolder, nil, SECTION_GAP)
 
-    local trinkets = BR.CRBParity and BR.CRBParity.TRINKETS
+    local trinkets = BR.JG and BR.JG.TRINKETS
     if type(trinkets) == "table" and #trinkets > 0 then
         LayoutSectionHeader(setLayout, settingsContent, "Excluded Trinkets")
         for _, row in ipairs(trinkets) do
