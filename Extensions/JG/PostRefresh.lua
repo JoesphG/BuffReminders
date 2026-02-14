@@ -4,7 +4,7 @@ if not BR or not BR.BuffState or not BR.StateHelpers then
     return
 end
 
-BR.CRBParity = BR.CRBParity or {}
+BR.JG = BR.JG or {}
 
 local function IsSecretValue(v)
     if type(issecretvalue) == "function" then
@@ -29,8 +29,8 @@ end
 
 local function EnsureParityDB()
     BuffRemindersDB = BuffRemindersDB or {}
-    BuffRemindersDB.crbParity = BuffRemindersDB.crbParity or {}
-    local db = BuffRemindersDB.crbParity
+    BuffRemindersDB.jgParity = BuffRemindersDB.jgParity or {}
+    local db = BuffRemindersDB.jgParity
 
     if db.healthstoneThreshold == nil then
         db.healthstoneThreshold = 1
@@ -460,11 +460,11 @@ local function ProcessSoulstone(db)
 end
 
 local function ProcessSoulwell(db)
-    local entry = BR.BuffState.GetEntry("crbp_soulwell")
+    local entry = BR.BuffState.GetEntry("jg_soulwell")
     if not entry then
         return
     end
-    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("crbp_soulwell") then
+    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("jg_soulwell") then
         HideEntry(entry)
         return
     end
@@ -508,11 +508,11 @@ local function ProcessSoulwell(db)
 end
 
 local function ProcessRepair(db)
-    local entry = BR.BuffState.GetEntry("crbp_repair")
+    local entry = BR.BuffState.GetEntry("jg_repair")
     if not entry then
         return
     end
-    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("crbp_repair") then
+    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("jg_repair") then
         HideEntry(entry)
         return
     end
@@ -532,11 +532,11 @@ local function ProcessRepair(db)
 end
 
 local function ProcessEatingTimer(db)
-    local entry = BR.BuffState.GetEntry("crbp_eating_timer")
+    local entry = BR.BuffState.GetEntry("jg_eating_timer")
     if not entry then
         return
     end
-    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("crbp_eating_timer") then
+    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("jg_eating_timer") then
         HideEntry(entry)
         return
     end
@@ -646,7 +646,7 @@ local function UnitHasAnyTrackedAura(unit, spellIDs, nameSet, mineOnly)
 end
 
 local function ProcessTrinkets(db)
-    local rows = BR.CRBParity and BR.CRBParity.TRINKETS
+    local rows = BR.JG and BR.JG.TRINKETS
     if type(rows) ~= "table" then
         return
     end
@@ -750,10 +750,10 @@ local function PostRefreshPatch()
     RebuildVisibleByCategory()
 end
 
-if BR.CRBParity._refreshWrapped then
+if BR.JG._refreshWrapped then
     return
 end
-BR.CRBParity._refreshWrapped = true
+BR.JG._refreshWrapped = true
 
 local origRefresh = BR.BuffState.Refresh
 BR.BuffState.Refresh = function(...)
@@ -763,7 +763,7 @@ BR.BuffState.Refresh = function(...)
 end
 
 -- Keep parity reminders fresh on relevant events.
-if not BR.CRBParity._eventFrame then
+if not BR.JG._eventFrame then
     local f = CreateFrame("Frame")
     f:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
     f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
@@ -785,5 +785,5 @@ if not BR.CRBParity._eventFrame then
             end
         end
     end)
-    BR.CRBParity._eventFrame = f
+    BR.JG._eventFrame = f
 end

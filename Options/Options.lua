@@ -2140,8 +2140,8 @@ local function CreateOptionsPanel()
     setLayout:Add(loginMsgHolder)
 
     -- Standalone extension hook (keeps extension settings outside core Options logic).
-    if BR.CRBParity and BR.CRBParity.BuildSettingsSection then
-        BR.CRBParity.BuildSettingsSection(settingsContent, setLayout, {
+    if BR.JG and BR.JG.BuildSettingsSection then
+        BR.JG.BuildSettingsSection(settingsContent, setLayout, {
             Components = Components,
             LayoutSectionHeader = LayoutSectionHeader,
             UpdateDisplay = UpdateDisplay,
