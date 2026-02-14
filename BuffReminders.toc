@@ -28,4 +28,5 @@ Display\ImportExport.lua
 Display\Movers.lua
 Display\SecureButtons.lua
 Extensions\CRBParity\ClickActions.lua
+Extensions\CRBParity\OptionsSection.lua
 Options\Options.lua
