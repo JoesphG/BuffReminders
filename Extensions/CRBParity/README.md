@@ -24,16 +24,30 @@ This folder adds feature parity behavior inspired by `ClickableRaidBuffs` while 
 
 4. Eating timer
 - Shows active timer-style entry while eating.
-- Suppresses default food reminder entry during active eating timer display.
+- Optional suppression of default food reminder entry during active eating timer display.
 
 5. Trinket reminders
-- Tracks selected equipped trinkets and their aura coverage.
+- Tracks selected equipped trinkets and aura coverage.
+- Supports `targetBuffID` semantics for parity trinkets.
+- Supports expiring threshold behavior for active trinket buffs.
+- Supports per-trinket exclusions in settings.
+
+6. Settings controls
+- CRB Parity section in Settings tab for:
+  - Healthstone threshold
+  - Soulstone threshold
+  - Repair threshold
+  - Trinket expiring threshold
+  - Eating timer toggles
+  - Excluded trinkets
+  - Optional repair-click macro toggle
 
 ## Files
 
 - `Extensions/CRBParity/Bootstrap.lua`
 - `Extensions/CRBParity/PostRefresh.lua`
 - `Extensions/CRBParity/ClickActions.lua`
+- `Extensions/CRBParity/OptionsSection.lua`
 
 ## TOC Wiring
 
@@ -49,6 +63,7 @@ State.lua
 Extensions\CRBParity\PostRefresh.lua
 Display\SecureButtons.lua
 Extensions\CRBParity\ClickActions.lua
+Extensions\CRBParity\OptionsSection.lua
 ```
 
 The extension depends on `BR.BUFF_TABLES` and `BR.BuffState`, so it must load after `Data\Buffs.lua` and after `State.lua` for refresh wrapping.
@@ -60,6 +75,12 @@ Stored under `BuffRemindersDB.crbParity`:
 - `healthstoneThreshold` (default: `1`)
 - `soulstoneThresholdMin` (default: `5`)
 - `durabilityThreshold` (default: `30`)
+- `trinketExpiringThresholdMin` (default: `15`)
+- `enableEatingTimer` (default: `true`)
+- `suppressFoodWhileEating` (default: `true`)
+- `excludedTrinkets` (default: `{}`)
+- `enableRepairMacro` (default: `false`)
+- `repairClickMacro` (default secure repair macro text)
 
 ## Reapply After Upstream Resync
 
