@@ -24,6 +24,26 @@
 - Custom buff tracking by spell ID (with in-combat glow detection)
 - Highly configurable (filtering, sizing, visibility)
 
+## Fork Customizations
+
+This fork includes an additive `Extensions/CRBParity` module to mirror key `ClickableRaidBuffs` behaviors while keeping upstream sync low-friction.
+
+- Soulstone parity behavior with expiration threshold logic
+- Healthstone parity behavior with charge threshold logic and Soulwell reminder handling
+- Repair/durability reminder with configurable threshold and optional click-to-repair macro
+- Eating timer row with optional suppression of default food reminder while eating
+- Trinket reminder rows with equipped-trinket detection, `targetBuffID` support, expiration threshold support, and per-trinket exclusions
+- Dedicated CRB parity settings section in `/br` options
+
+Implementation files in this fork:
+
+- `Extensions/CRBParity/Bootstrap.lua`
+- `Extensions/CRBParity/PostRefresh.lua`
+- `Extensions/CRBParity/ClickActions.lua`
+- `Extensions/CRBParity/OptionsSection.lua`
+
+Additional details and reapply notes are documented in `Extensions/CRBParity/README.md`.
+
 <p align="center">
   <img src="https://github.com/zerbiniandrea/BuffReminders/blob/main/images/buffs-split-groups.png?raw=true" />
 </p>
