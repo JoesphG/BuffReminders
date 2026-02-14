@@ -1,0 +1,227 @@
+local _, BR = ...
+
+if not BR then
+    return
+end
+
+BR.CRBParity = BR.CRBParity or {}
+
+local function EnsureParityDB()
+    BuffRemindersDB = BuffRemindersDB or {}
+    BuffRemindersDB.crbParity = BuffRemindersDB.crbParity or {}
+    local db = BuffRemindersDB.crbParity
+
+    if db.healthstoneThreshold == nil then
+        db.healthstoneThreshold = 1
+    end
+    if db.soulstoneThresholdMin == nil then
+        db.soulstoneThresholdMin = 5
+    end
+    if db.durabilityThreshold == nil then
+        db.durabilityThreshold = 30
+    end
+    if db.trinketExpiringThresholdMin == nil then
+        db.trinketExpiringThresholdMin = 15
+    end
+    if db.enableEatingTimer == nil then
+        db.enableEatingTimer = true
+    end
+    if db.suppressFoodWhileEating == nil then
+        db.suppressFoodWhileEating = true
+    end
+    if db.excludedTrinkets == nil then
+        db.excludedTrinkets = {}
+    end
+    if db.enableRepairMacro == nil then
+        db.enableRepairMacro = false
+    end
+    if db.repairClickMacro == nil then
+        db.repairClickMacro = "/run if CanMerchantRepair() then RepairAllItems(false) end"
+    end
+
+    return db
+end
+
+BR.CRBParity.BuildSettingsSection = function(settingsContent, setLayout, opts)
+    if not settingsContent or not setLayout or not opts then
+        return
+    end
+
+    local Components = opts.Components
+    local LayoutSectionHeader = opts.LayoutSectionHeader
+    local UpdateDisplay = opts.UpdateDisplay
+    local setX = opts.setX or 20
+    local COMPONENT_GAP = opts.COMPONENT_GAP or 4
+    local SECTION_GAP = opts.SECTION_GAP or 8
+
+    EnsureParityDB()
+
+    LayoutSectionHeader(setLayout, settingsContent, "CRB Parity")
+
+    local hsHolder = Components.Slider(settingsContent, {
+        label = "Healthstone",
+        min = 0,
+        max = 5,
+        step = 1,
+        suffix = " charges",
+        get = function()
+            local db = EnsureParityDB()
+            return tonumber(db.healthstoneThreshold) or 1
+        end,
+        tooltip = {
+            title = "Healthstone warning threshold",
+            desc = "Show warning when your charges are at or below this value.",
+        },
+        onChange = function(val)
+            local db = EnsureParityDB()
+            db.healthstoneThreshold = val
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(hsHolder, nil, COMPONENT_GAP)
+
+    local ssHolder = Components.Slider(settingsContent, {
+        label = "Soulstone",
+        min = 1,
+        max = 30,
+        step = 1,
+        suffix = " min",
+        get = function()
+            local db = EnsureParityDB()
+            return tonumber(db.soulstoneThresholdMin) or 5
+        end,
+        tooltip = {
+            title = "Soulstone expiring threshold",
+            desc = "Show warning when your active Soulstone has less than this many minutes remaining.",
+        },
+        onChange = function(val)
+            local db = EnsureParityDB()
+            db.soulstoneThresholdMin = val
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(ssHolder, nil, COMPONENT_GAP)
+
+    local repairHolder = Components.Slider(settingsContent, {
+        label = "Repair",
+        min = 1,
+        max = 100,
+        step = 1,
+        suffix = "%",
+        get = function()
+            local db = EnsureParityDB()
+            return tonumber(db.durabilityThreshold) or 30
+        end,
+        tooltip = {
+            title = "Durability warning threshold",
+            desc = "Show repair reminder when your lowest equipped slot reaches this percent or lower.",
+        },
+        onChange = function(val)
+            local db = EnsureParityDB()
+            db.durabilityThreshold = val
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(repairHolder, nil, COMPONENT_GAP)
+
+    local trinketExpireHolder = Components.Slider(settingsContent, {
+        label = "Trinkets",
+        min = 0,
+        max = 30,
+        step = 1,
+        suffix = " min",
+        get = function()
+            local db = EnsureParityDB()
+            return tonumber(db.trinketExpiringThresholdMin) or 15
+        end,
+        tooltip = {
+            title = "Trinket expiring threshold",
+            desc = "Show trinket icons when tracked trinket buffs are about to expire.",
+        },
+        onChange = function(val)
+            local db = EnsureParityDB()
+            db.trinketExpiringThresholdMin = val
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(trinketExpireHolder, nil, SECTION_GAP)
+
+    local eatingTimerHolder = Components.Checkbox(settingsContent, {
+        label = "Show eating timer",
+        get = function()
+            local db = EnsureParityDB()
+            return db.enableEatingTimer ~= false
+        end,
+        onChange = function(checked)
+            local db = EnsureParityDB()
+            db.enableEatingTimer = checked
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(eatingTimerHolder, nil, COMPONENT_GAP)
+
+    setLayout:SetX(setX + 20)
+    local suppressFoodHolder = Components.Checkbox(settingsContent, {
+        label = "Hide food icon while eating",
+        get = function()
+            local db = EnsureParityDB()
+            return db.suppressFoodWhileEating ~= false
+        end,
+        enabled = function()
+            local db = EnsureParityDB()
+            return db.enableEatingTimer ~= false
+        end,
+        onChange = function(checked)
+            local db = EnsureParityDB()
+            db.suppressFoodWhileEating = checked
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(suppressFoodHolder, nil, COMPONENT_GAP)
+    setLayout:SetX(setX)
+
+    local repairMacroEnableHolder = Components.Checkbox(settingsContent, {
+        label = "Enable repair-click macro",
+        tooltip = {
+            title = "Repair icon click macro",
+            desc = "When enabled, clicking the Repair icon runs a secure macro out of combat.",
+        },
+        get = function()
+            local db = EnsureParityDB()
+            return db.enableRepairMacro == true
+        end,
+        onChange = function(checked)
+            local db = EnsureParityDB()
+            db.enableRepairMacro = checked
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(repairMacroEnableHolder, nil, SECTION_GAP)
+
+    local trinkets = BR.CRBParity and BR.CRBParity.TRINKETS
+    if type(trinkets) == "table" and #trinkets > 0 then
+        LayoutSectionHeader(setLayout, settingsContent, "Excluded Trinkets")
+        for _, row in ipairs(trinkets) do
+            local label = row.name or ("Item " .. tostring(row.itemID))
+            local itemID = row.itemID
+            local key = row.key
+            local holder = Components.Checkbox(settingsContent, {
+                label = label,
+                get = function()
+                    local db = EnsureParityDB()
+                    local ex = db.excludedTrinkets or {}
+                    return ex[itemID] or ex[tostring(itemID)] or ex[key] or false
+                end,
+                onChange = function(checked)
+                    local db = EnsureParityDB()
+                    db.excludedTrinkets = db.excludedTrinkets or {}
+                    db.excludedTrinkets[itemID] = checked
+                    db.excludedTrinkets[tostring(itemID)] = checked
+                    db.excludedTrinkets[key] = checked
+                    UpdateDisplay()
+                end,
+            })
+            setLayout:Add(holder, nil, COMPONENT_GAP)
+        end
+    end
+end
