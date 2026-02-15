@@ -61,7 +61,7 @@ EnsureInjectedSelfBuff({
     key = "jg_soulwell",
     name = "Soulwell",
     class = "WARLOCK",
-    iconOverride = 136194,
+    displayIcon = 136194,
     missingText = "SOUL\nWELL",
     infoTooltip = "JG|Shows when Soulwell is available and your healthstones are low.",
 })
@@ -71,7 +71,7 @@ EnsureInjectedSelfBuff({
     spellID = 0,
     key = "jg_repair",
     name = "Repair",
-    iconOverride = 136241,
+    displayIcon = 136241,
     missingText = "REPAIR",
     infoTooltip = "JG|Shows when your equipped durability drops below threshold.",
 })
@@ -81,7 +81,7 @@ EnsureInjectedSelfBuff({
     spellID = 0,
     key = "jg_eating_timer",
     name = "Eating Timer",
-    iconOverride = 133950,
+    displayIcon = 133950,
     missingText = "EATING",
     infoTooltip = "JG|Shows an active countdown while eating.",
 })
@@ -92,7 +92,7 @@ for _, row in ipairs(BR.JG.TRINKETS) do
         spellID = 0,
         key = row.key,
         name = row.name,
-        iconOverride = GetItemIconSafe(row.itemID, row.fallbackIcon),
+        displayIcon = GetItemIconSafe(row.itemID, row.fallbackIcon),
         missingText = "TRINKET",
         infoTooltip = "JG|Tracks equipped trinket buff coverage.",
     })
