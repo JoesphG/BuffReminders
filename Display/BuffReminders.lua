@@ -960,6 +960,16 @@ local function GetOrCreateExtraFrame(frame, index)
     return extra
 end
 
+---Hide all lazily-created extra frames for a base buff frame.
+---@param frame BuffFrame
+local function HideExtraFrames(frame)
+    if frame and frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
+    end
+end
+
 -- Helper to position frames within a container using specified settings
 local function PositionFramesInContainer(container, frames, iconSize, spacing, direction)
     local count = #frames
@@ -1017,10 +1027,13 @@ local function GetSortedCategories()
     return sorted
 end
 
----Build a signature string from a list of frames (by buffKey)
+---Build a layout signature from frame keys plus layout parameters.
 ---@param frames table[]
+---@param iconSize number
+---@param spacing number
+---@param direction string
 ---@return string
-local function BuildLayoutSignature(frames)
+local function BuildLayoutSignature(frames, iconSize, spacing, direction)
     if #frames == 0 then
         return ""
     end
@@ -1030,6 +1043,12 @@ local function BuildLayoutSignature(frames)
         keys[i] = (frame.buffDef and frame.buffDef.key) or ""
     end
     return table.concat(keys, ",")
+        .. "|"
+        .. tostring(iconSize)
+        .. "|"
+        .. tostring(spacing)
+        .. "|"
+        .. tostring(direction)
 end
 
 -- Position and size the main container frame with the given buff frames
@@ -1037,13 +1056,6 @@ local function PositionMainContainer(mainFrameBuffs)
     local db = BuffRemindersDB
 
     if #mainFrameBuffs > 0 then
-        -- Skip repositioning if the same frames are visible in the same order
-        local sig = BuildLayoutSignature(mainFrameBuffs)
-        if sig == lastMainSignature then
-            return
-        end
-        lastMainSignature = sig
-
         local mainSettings = GetCategorySettings("main")
         local iconSize = mainSettings.iconSize or 64
         local spacing = math.floor(iconSize * (mainSettings.spacing or 0.2))
@@ -1071,6 +1083,10 @@ local function PositionMainContainer(mainFrameBuffs)
         mainFrame:ClearAllPoints()
         mainFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
 
+        -- Always relayout to guarantee stable non-overlapping slots on dynamic add/remove.
+        -- Keep the signature updated for compatibility with modules that may inspect it.
+        lastMainSignature = BuildLayoutSignature(mainFrameBuffs, iconSize, spacing, direction)
+
         PositionFramesInContainer(mainFrame, mainFrameBuffs, iconSize, spacing, direction)
         mainFrame:Show()
     else
@@ -1087,13 +1103,6 @@ local function PositionSplitCategory(category, frames)
     end
 
     if #frames > 0 then
-        -- Skip repositioning if the same frames are visible in the same order
-        local sig = BuildLayoutSignature(frames)
-        if sig == (lastSplitSignatures[category] or "") then
-            return
-        end
-        lastSplitSignatures[category] = sig
-
         local catSettings = GetCategorySettings(category)
         local direction = catSettings.growDirection or "CENTER"
         local anchor = DIRECTION_ANCHORS[direction] or "CENTER"
@@ -1117,6 +1126,10 @@ local function PositionSplitCategory(category, frames)
 
         catFrame:ClearAllPoints()
         catFrame:SetPoint(anchor, UIParent, "CENTER", pos.x or 0, pos.y or 0)
+
+        -- Always relayout to guarantee stable non-overlapping slots on dynamic add/remove.
+        -- Keep signatures updated for compatibility with modules that may inspect them.
+        lastSplitSignatures[category] = BuildLayoutSignature(frames, iconSize, spacing, direction)
 
         PositionFramesInContainer(catFrame, frames, iconSize, spacing, direction)
         catFrame:Show()
@@ -1561,6 +1574,9 @@ end
 ---@param frameList table[] List to append extra frames to (for positioning)
 ---@param parentFrame Frame Parent for extra frames
 local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
+    -- Always start clean so removed bag items cannot leave orphan expanded icons.
+    HideExtraFrames(frame)
+
     if entry.displayType ~= "missing" or entry.isEating then
         return
     end
@@ -1609,8 +1625,12 @@ end
 local function ExpandPetActions(frame, entry, frameList)
     if not entry.petActions or #entry.petActions == 0 or not frame:IsShown() then
         frame._br_pet_spell = nil
+        HideExtraFrames(frame)
         return
     end
+
+    -- Always start clean so fewer actions never leave orphan expanded icons.
+    HideExtraFrames(frame)
 
     -- Override main frame with first action
     local first = entry.petActions[1]
@@ -1641,6 +1661,7 @@ end
 ---@param frameList? table[] List to append extra frames to (for positioning)
 local function ApplyPetDisplayMode(frame, entry, frameList)
     if not entry.petActions then
+        HideExtraFrames(frame)
         return
     end
     local petMode = (BuffRemindersDB.defaults or {}).petDisplayMode or "generic"
@@ -1695,6 +1716,10 @@ UpdateDisplay = function()
         if frame then
             frame._cachedItems = nil
         end
+    end
+    -- Hard reset all expanded extra frames every cycle; they are re-shown on demand.
+    for _, frame in pairs(buffFrames) do
+        HideExtraFrames(frame)
     end
 
     if testMode then
