@@ -59,7 +59,7 @@ The fork includes:
   - `Extensions\JG\ClickActions.lua`
   - `Extensions\JG\PetHover.lua`
   - `Extensions\JG\OptionsSection.lua`
-- Fork version suffix: `3.7.4-JG.4`.
+- Fork version suffix: `3.7.4-JG.5`.
 
 7. `Options/Options.lua`
 - Integrates extension settings by calling `BR.JG.BuildSettingsSection(...)`.
@@ -72,6 +72,15 @@ The fork includes:
 - Main and split containers always relayout each display pass.
 - Expanded extra frames are force-hidden each cycle before selective re-show.
 - Prevents orphan/leftover extra icons from colliding with base icons.
+
+10. Custom buff click/data extensions (outside `Extensions/JG/`)
+- `Options/Options.lua`:
+  - Custom modal includes `Cast ID` and `Item ID` fields (saved to custom buff entries).
+  - Footer/layout spacing adjusted to avoid Delete button collisions.
+- `Display/SecureButtons.lua`:
+  - Custom click actions can use `itemID` (secure macro use flow) when aura spell ID differs.
+- `State.lua`:
+  - Custom buffs with `itemID` only process/show when that item is in bags or equipped.
 
 ## Required TOC Order
 
