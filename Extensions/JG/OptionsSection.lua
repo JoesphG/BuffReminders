@@ -20,17 +20,11 @@ local function EnsureParityDB()
     if db.durabilityThreshold == nil then
         db.durabilityThreshold = 30
     end
-    if db.trinketExpiringThresholdMin == nil then
-        db.trinketExpiringThresholdMin = 15
-    end
     if db.enableEatingTimer == nil then
         db.enableEatingTimer = true
     end
     if db.suppressFoodWhileEating == nil then
         db.suppressFoodWhileEating = true
-    end
-    if db.excludedTrinkets == nil then
-        db.excludedTrinkets = {}
     end
     if db.enableRepairMacro == nil then
         db.enableRepairMacro = false
@@ -124,28 +118,6 @@ BR.JG.BuildSettingsSection = function(settingsContent, setLayout, opts)
     })
     setLayout:Add(repairHolder, nil, COMPONENT_GAP)
 
-    local trinketExpireHolder = Components.Slider(settingsContent, {
-        label = "Trinkets",
-        min = 0,
-        max = 30,
-        step = 1,
-        suffix = " min",
-        get = function()
-            local db = EnsureParityDB()
-            return tonumber(db.trinketExpiringThresholdMin) or 15
-        end,
-        tooltip = {
-            title = "Trinket expiring threshold",
-            desc = "Show trinket icons when tracked trinket buffs are about to expire.",
-        },
-        onChange = function(val)
-            local db = EnsureParityDB()
-            db.trinketExpiringThresholdMin = val
-            UpdateDisplay()
-        end,
-    })
-    setLayout:Add(trinketExpireHolder, nil, SECTION_GAP)
-
     local eatingTimerHolder = Components.Checkbox(settingsContent, {
         label = "Show eating timer",
         get = function()
@@ -197,31 +169,4 @@ BR.JG.BuildSettingsSection = function(settingsContent, setLayout, opts)
         end,
     })
     setLayout:Add(repairMacroEnableHolder, nil, SECTION_GAP)
-
-    local trinkets = BR.JG and BR.JG.TRINKETS
-    if type(trinkets) == "table" and #trinkets > 0 then
-        LayoutSectionHeader(setLayout, settingsContent, "Excluded Trinkets")
-        for _, row in ipairs(trinkets) do
-            local label = row.name or ("Item " .. tostring(row.itemID))
-            local itemID = row.itemID
-            local key = row.key
-            local holder = Components.Checkbox(settingsContent, {
-                label = label,
-                get = function()
-                    local db = EnsureParityDB()
-                    local ex = db.excludedTrinkets or {}
-                    return ex[itemID] or ex[tostring(itemID)] or ex[key] or false
-                end,
-                onChange = function(checked)
-                    local db = EnsureParityDB()
-                    db.excludedTrinkets = db.excludedTrinkets or {}
-                    db.excludedTrinkets[itemID] = checked
-                    db.excludedTrinkets[tostring(itemID)] = checked
-                    db.excludedTrinkets[key] = checked
-                    UpdateDisplay()
-                end,
-            })
-            setLayout:Add(holder, nil, COMPONENT_GAP)
-        end
-    end
 end

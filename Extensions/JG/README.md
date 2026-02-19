@@ -13,13 +13,10 @@ The fork includes:
 ## Customization Inventory By File
 
 1. `Extensions/JG/Bootstrap.lua`
-- Defines `BR.JG.TRINKETS` tracked trinket rows.
 - Injects additive self-buff anchors into `BR.BUFF_TABLES.self`:
   - `jg_soulwell`
   - `jg_repair`
   - `jg_eating_timer`
-  - `jg_trinket_*` rows
-- Populates `BR.JG.ITEM_ACTIONS` for item-click support.
 
 2. `Extensions/JG/PostRefresh.lua`
 - Wraps `BR.BuffState.Refresh` and applies parity post-processing in one pass:
@@ -28,7 +25,6 @@ The fork includes:
   - soulwell
   - repair
   - eating timer
-  - trinkets
 - Rebuilds `BR.BuffState.visibleByCategory` after post-refresh mutations.
 - Adds event-driven refresh triggers for parity rows.
 - Uses secure-value-safe guards (`issecretvalue`) for aura/cooldown reads.
@@ -37,7 +33,6 @@ The fork includes:
 - Ensures self category remains clickable for parity rows.
 - Adds/maintains secure click overlays for JG rows.
 - Supports:
-  - trinket use (`/use 13`/`/use 14` when equipped, fallback item use)
   - optional repair macro click action from settings
 - Reapplies parity item actions after display/secure refresh to prevent action loss.
 
@@ -46,10 +41,8 @@ The fork includes:
   - healthstone threshold
   - soulstone threshold
   - repair threshold
-  - trinket expiring threshold
   - eating timer toggles
   - repair click macro enable toggle
-  - excluded trinket checkboxes
 - Owns defaults/initialization for `BuffRemindersDB.jgParity`.
 
 5. `Extensions/JG/PetHover.lua`
@@ -66,7 +59,7 @@ The fork includes:
   - `Extensions\JG\ClickActions.lua`
   - `Extensions\JG\PetHover.lua`
   - `Extensions\JG\OptionsSection.lua`
-- Fork version suffix: `@project-version@-JG.2`.
+- Fork version suffix: `3.7.4-JG.4`.
 
 7. `Options/Options.lua`
 - Integrates extension settings by calling `BR.JG.BuildSettingsSection(...)`.
@@ -109,10 +102,8 @@ Why: `Bootstrap` requires buff tables; `PostRefresh` wraps `State.Refresh`; clic
 - `healthstoneThreshold` (default `1`)
 - `soulstoneThresholdMin` (default `5`)
 - `durabilityThreshold` (default `30`)
-- `trinketExpiringThresholdMin` (default `15`)
 - `enableEatingTimer` (default `true`)
 - `suppressFoodWhileEating` (default `true`)
-- `excludedTrinkets` (default `{}`)
 - `enableRepairMacro` (default `false`)
 - `repairClickMacro` (default secure repair macro text)
 
@@ -130,8 +121,6 @@ Why: `Bootstrap` requires buff tables; `PostRefresh` wraps `State.Refresh`; clic
 - Solo, party, and raid contexts.
 - Instance vs open-world gating behavior.
 - Soulwell/healthstone de-duplication behavior.
-- Trinket reminders only when tracked trinkets are equipped.
-- Trinket click actions work after combat and after display refreshes.
 - Pet hover tooltip/icon behavior in generic and expanded pet modes.
 - Eating timer visibility and food suppression toggle behavior.
 - Repeated dynamic icon add/remove cycles do not overlap.

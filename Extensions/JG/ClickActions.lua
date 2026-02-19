@@ -63,19 +63,6 @@ local function GetRepairMacroText()
     return text
 end
 
-local function GetEquippedTrinketSlot(itemID)
-    if not itemID then
-        return nil
-    end
-    if GetInventoryItemID("player", 13) == itemID then
-        return 13
-    end
-    if GetInventoryItemID("player", 14) == itemID then
-        return 14
-    end
-    return nil
-end
-
 local function ApplyParityItemActions(category)
     if category ~= "self" then
         return
@@ -89,38 +76,24 @@ local function ApplyParityItemActions(category)
 
     EnsureSelfClickableCategory()
 
-    local actions = BR.JG.ITEM_ACTIONS or {}
     local repairMacro = GetRepairMacroText()
 
     for _, frame in pairs(BR.Display.frames or {}) do
-        if frame and frame.buffCategory == "self" and frame.key and frame:IsShown() then
+        if frame and frame.buffCategory == "self" and frame.key == "jg_repair" and frame:IsShown() then
             local overlay = EnsureClickOverlay(frame)
-            if frame.key == "jg_repair" and repairMacro then
+            if repairMacro then
                 overlay:SetAttribute("type", "macro")
                 overlay:SetAttribute("macrotext", repairMacro)
                 overlay:SetAttribute("spell", nil)
                 overlay:SetAttribute("item", nil)
+                overlay.itemID = nil
                 overlay._br_has_action = true
                 overlay:EnableMouse(true)
-            else
-                local itemID = actions[frame.key]
-                if itemID then
-                    local slot = GetEquippedTrinketSlot(itemID)
-                    if slot then
-                        overlay:SetAttribute("type", "macro")
-                        overlay:SetAttribute("macrotext", "/use " .. tostring(slot))
-                        overlay:SetAttribute("spell", nil)
-                        overlay:SetAttribute("item", nil)
-                    else
-                        overlay:SetAttribute("type", "item")
-                        overlay:SetAttribute("item", "item:" .. tostring(itemID))
-                        overlay:SetAttribute("spell", nil)
-                        overlay:SetAttribute("macrotext", nil)
-                    end
-                    overlay.itemID = itemID
-                    overlay._br_has_action = true
-                    overlay:EnableMouse(true)
-                end
+            elseif frame.clickOverlay then
+                frame.clickOverlay._br_has_action = false
+                frame.clickOverlay:EnableMouse(false)
+                frame.clickOverlay:Hide()
+                frame.clickOverlay._br_left = nil
             end
         end
     end
@@ -163,7 +136,6 @@ if not BR.JG._clickEventFrame then
     local f = CreateFrame("Frame")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
     f:RegisterEvent("GROUP_ROSTER_UPDATE")
-    f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     f:RegisterEvent("PLAYER_REGEN_ENABLED")
     f:SetScript("OnEvent", function(_, event)
         if event == "PLAYER_REGEN_ENABLED" or not InCombatLockdown() then

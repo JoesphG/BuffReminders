@@ -89,6 +89,8 @@ local _, BR = ...
 
 ---@class CustomBuff
 ---@field spellID SpellID
+---@field castSpellID? number Spell ID to cast when different from tracked aura spell ID(s)
+---@field itemID? number Item ID to use for click-to-cast (e.g., trinkets/procs)
 ---@field key string
 ---@field name string
 ---@field missingText? string
