@@ -668,6 +668,7 @@ end
 -- Forward declarations
 local UpdateDisplay, ToggleTestMode
 local UpdateFallbackDisplay, RenderPetEntries
+local ResetLayoutSignatures
 
 -- Local alias for glow module
 local SetExpirationGlow = BR.Glow.SetExpiration
@@ -1978,6 +1979,11 @@ local function CreateCustomBuffFrameRuntime(customBuff)
     if customBuff.glowMode ~= "disabled" then
         RegisterGlowBuff(customBuff, "custom")
     end
+    -- Force layout recalculation and schedule a deferred display refresh so the
+    -- new frame renders even if the immediate UpdateDisplay call in the save
+    -- handler fires before WoW has fully processed the new frame hierarchy.
+    ResetLayoutSignatures()
+    C_Timer.After(0, SetDirty)
 end
 
 -- Reparent all buff frames to appropriate parent based on split status
@@ -2033,6 +2039,9 @@ local function RemoveCustomBuffFrame(key)
             break
         end
     end
+    -- Force layout recalculation so the removed frame's slot is reclaimed
+    ResetLayoutSignatures()
+    C_Timer.After(0, SetDirty)
 end
 
 -- Export custom buff management for Options.lua
@@ -2124,7 +2133,7 @@ end
 local CallbackRegistry = BR.CallbackRegistry
 
 ---Reset layout signatures so next UpdateDisplay forces repositioning
-local function ResetLayoutSignatures()
+ResetLayoutSignatures = function()
     lastMainSignature = ""
     wipe(lastSplitSignatures)
 end
