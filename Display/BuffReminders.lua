@@ -1515,7 +1515,13 @@ local function RenderVisibleEntry(frame, entry)
     if entry.isEating then
         frame.icon:SetTexture(EATING_ICON)
         frame._br_eating_icon = true
-        frame.count:Hide()
+        if entry.countText and entry.countText ~= "" then
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
+            frame.count:SetText(entry.countText)
+            frame.count:Show()
+        else
+            frame.count:Hide()
+        end
         frame:Show()
         SetExpirationGlow(frame, false)
         return true

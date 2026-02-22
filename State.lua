@@ -672,6 +672,7 @@ local EATING_AURA_ICON = BR.EATING_AURA_ICON
 
 -- Event-driven eating state: tracked via UNIT_AURA payload, no per-render scanning.
 local eatingAuraInstanceID = nil
+local eatingAuraExpirationTime = nil
 
 ---Check if the player is currently eating (reads cached flag, O(1))
 ---@return boolean
@@ -679,9 +680,23 @@ local function IsPlayerEating()
     return eatingAuraInstanceID ~= nil
 end
 
+---Get remaining time on the active eating aura.
+---@return number?
+local function GetEatingRemaining()
+    if not eatingAuraExpirationTime or eatingAuraExpirationTime <= 0 then
+        return nil
+    end
+    local remaining = eatingAuraExpirationTime - GetTime()
+    if remaining > 0 then
+        return remaining
+    end
+    return nil
+end
+
 ---Full aura scan to seed eating state (call once on init / reload)
 local function ScanEatingState()
     eatingAuraInstanceID = nil
+    eatingAuraExpirationTime = nil
     local i = 1
     local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
     while auraData do
@@ -690,6 +705,9 @@ local function ScanEatingState()
         end)
         if ok and match then
             eatingAuraInstanceID = auraData.auraInstanceID
+            if auraData.expirationTime and auraData.expirationTime > 0 then
+                eatingAuraExpirationTime = auraData.expirationTime
+            end
             return
         end
         i = i + 1
@@ -710,6 +728,22 @@ local function UpdateEatingState(updateInfo)
             end)
             if ok and match then
                 eatingAuraInstanceID = aura.auraInstanceID
+                if aura.expirationTime and aura.expirationTime > 0 then
+                    eatingAuraExpirationTime = aura.expirationTime
+                else
+                    eatingAuraExpirationTime = nil
+                end
+                break
+            end
+        end
+    end
+    if updateInfo.updatedAuraInstanceIDs and eatingAuraInstanceID then
+        for _, id in ipairs(updateInfo.updatedAuraInstanceIDs) do
+            if id == eatingAuraInstanceID then
+                local aura = C_UnitAuras.GetAuraDataByAuraInstanceID("player", id)
+                if aura and aura.expirationTime and aura.expirationTime > 0 then
+                    eatingAuraExpirationTime = aura.expirationTime
+                end
                 break
             end
         end
@@ -718,6 +752,7 @@ local function UpdateEatingState(updateInfo)
         for _, id in ipairs(updateInfo.removedAuraInstanceIDs) do
             if id == eatingAuraInstanceID then
                 eatingAuraInstanceID = nil
+                eatingAuraExpirationTime = nil
                 break
             end
         end
@@ -1252,7 +1287,16 @@ function BuffState.Refresh()
             end
             -- Eating state for food entries (display uses this for icon override)
             if entry.visible and buff.key == "food" then
-                entry.isEating = IsPlayerEating()
+                local isEating = IsPlayerEating()
+                if isEating and entry.displayType == "missing" then
+                    entry.isEating = true
+                    local eatingRemaining = GetEatingRemaining()
+                    if eatingRemaining then
+                        entry.countText = FormatRemainingTime(eatingRemaining)
+                    end
+                else
+                    entry.isEating = nil
+                end
             end
         end
     end
