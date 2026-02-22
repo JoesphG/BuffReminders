@@ -506,6 +506,7 @@ local function CreateOptionsPanel()
                 if not seenGroups[buff.groupId] then
                     seenGroups[buff.groupId] = true
                     local groupInfo = BuffGroups[buff.groupId]
+                    local groupDisplayName = (groupInfo and groupInfo.displayName) or buff.name or buff.groupId
                     local displayIcon = groupIconOverrides[buff.groupId]
                     if displayIcon and #displayIcon == 0 then
                         displayIcon = nil
@@ -521,7 +522,7 @@ local function CreateOptionsPanel()
                         y,
                         spells,
                         buff.groupId,
-                        groupInfo.displayName,
+                        groupDisplayName,
                         buff.infoTooltip,
                         displayIcon
                     )

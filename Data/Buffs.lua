@@ -693,6 +693,7 @@ BR.BUFF_TABLES = {
 ---@type table<string, BuffGroup>
 BR.BuffGroups = {
     beacons = { displayName = "Beacons" },
+    earthShieldTargeting = { displayName = "Earth Shield Targeting" },
     shamanImbues = { displayName = "Shaman Imbues" },
     paladinRites = { displayName = "Paladin Rites" },
     pets = { displayName = "Pets" },
