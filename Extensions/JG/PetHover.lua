@@ -84,6 +84,8 @@ local function EnsureHoverScripts(frame)
             return
         end
 
+        local iconOwner = self._jg_pet_icon_target or self
+
         -- Stable info can populate late; refresh hunter family/icon on hover.
         if self._jg_pet_is_hunter and (not self._jg_pet_family or self._jg_pet_family == "") then
             local hoverIcon, family = GetHunterHoverMeta(self._jg_pet_spell_id)
@@ -95,9 +97,15 @@ local function EnsureHoverScripts(frame)
             end
         end
 
-        if self._jg_pet_hover_icon and self.icon and self.icon.GetTexture then
-            self._jg_pet_icon_restore = self.icon:GetTexture()
-            self.icon:SetTexture(self._jg_pet_hover_icon)
+        if
+            self._jg_pet_hover_icon
+            and iconOwner
+            and iconOwner.icon
+            and iconOwner.icon.GetTexture
+            and iconOwner.icon.SetTexture
+        then
+            self._jg_pet_icon_restore = iconOwner.icon:GetTexture()
+            iconOwner.icon:SetTexture(self._jg_pet_hover_icon)
         end
 
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -113,11 +121,12 @@ local function EnsureHoverScripts(frame)
     end)
 
     frame:HookScript("OnLeave", function(self)
+        local iconOwner = self._jg_pet_icon_target or self
         if GameTooltip and GameTooltip:IsOwned(self) then
             GameTooltip:Hide()
         end
-        if self.icon and self._jg_pet_icon_restore then
-            self.icon:SetTexture(self._jg_pet_icon_restore)
+        if iconOwner and iconOwner.icon and iconOwner.icon.SetTexture and self._jg_pet_icon_restore then
+            iconOwner.icon:SetTexture(self._jg_pet_icon_restore)
             self._jg_pet_icon_restore = nil
         end
     end)
@@ -132,32 +141,55 @@ local function ClearHover(frame)
     frame._jg_pet_family = nil
     frame._jg_pet_hover_icon = nil
     frame._jg_pet_is_hunter = nil
+    frame._jg_pet_icon_target = nil
     frame:EnableMouse(false)
     if GameTooltip and GameTooltip:IsOwned(frame) then
         GameTooltip:Hide()
     end
 end
 
-local function ApplyHover(frame, action, class)
-    if not frame or not action or not action.spellID then
-        ClearHover(frame)
+local function ApplyHoverToTarget(target, iconTarget, action, class)
+    if not target or not action or not action.spellID then
+        ClearHover(target)
         return
     end
 
-    EnsureHoverScripts(frame)
-    frame._jg_pet_spell_id = action.spellID
-    frame._jg_pet_label = action.label
+    EnsureHoverScripts(target)
+    target._jg_pet_spell_id = action.spellID
+    target._jg_pet_label = action.label
+    target._jg_pet_icon_target = iconTarget
 
     if class == "HUNTER" then
-        frame._jg_pet_is_hunter = true
-        frame._jg_pet_hover_icon, frame._jg_pet_family = GetHunterHoverMeta(action.spellID)
+        target._jg_pet_is_hunter = true
+        target._jg_pet_hover_icon, target._jg_pet_family = GetHunterHoverMeta(action.spellID)
     else
-        frame._jg_pet_is_hunter = nil
-        frame._jg_pet_hover_icon = nil
-        frame._jg_pet_family = nil
+        target._jg_pet_is_hunter = nil
+        target._jg_pet_hover_icon = nil
+        target._jg_pet_family = nil
     end
 
-    frame:EnableMouse(true)
+    target:EnableMouse(true)
+end
+
+local function ApplyHover(frame, action, class)
+    if not frame then
+        return
+    end
+
+    ApplyHoverToTarget(frame, frame, action, class)
+    if frame.clickOverlay then
+        ApplyHoverToTarget(frame.clickOverlay, frame, action, class)
+    end
+end
+
+local function ClearHoverWithOverlay(frame)
+    if not frame then
+        return
+    end
+    ClearHover(frame)
+    if frame.clickOverlay then
+        ClearHover(frame.clickOverlay)
+    end
 end
 
 local function RefreshPetHover()
@@ -183,10 +215,10 @@ local function RefreshPetHover()
         if frame and frame.buffCategory == "pet" then
             local entry = byKey[key]
             if not (entry and frame:IsShown() and entry.petActions and #entry.petActions > 0) then
-                ClearHover(frame)
+                ClearHoverWithOverlay(frame)
                 if frame.extraFrames then
                     for _, extra in ipairs(frame.extraFrames) do
-                        ClearHover(extra)
+                        ClearHoverWithOverlay(extra)
                     end
                 end
             else
@@ -197,7 +229,7 @@ local function RefreshPetHover()
                             if extra and extra:IsShown() then
                                 ApplyHover(extra, entry.petActions[i + 1], class)
                             else
-                                ClearHover(extra)
+                                ClearHoverWithOverlay(extra)
                             end
                         end
                     end
@@ -206,7 +238,7 @@ local function RefreshPetHover()
                     ApplyHover(frame, entry.petActions[idx], class)
                     if frame.extraFrames then
                         for _, extra in ipairs(frame.extraFrames) do
-                            ClearHover(extra)
+                            ClearHoverWithOverlay(extra)
                         end
                     end
                 end
