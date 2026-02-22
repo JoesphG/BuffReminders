@@ -26,13 +26,6 @@ local function EnsureParityDB()
     if db.suppressFoodWhileEating == nil then
         db.suppressFoodWhileEating = true
     end
-    if db.enableRepairMacro == nil then
-        db.enableRepairMacro = false
-    end
-    if db.repairClickMacro == nil then
-        db.repairClickMacro = "/run if CanMerchantRepair() then RepairAllItems(false) end"
-    end
-
     return db
 end
 
@@ -46,7 +39,6 @@ BR.JG.BuildSettingsSection = function(settingsContent, setLayout, opts)
     local UpdateDisplay = opts.UpdateDisplay
     local setX = opts.setX or 20
     local COMPONENT_GAP = opts.COMPONENT_GAP or 4
-    local SECTION_GAP = opts.SECTION_GAP or 8
 
     EnsureParityDB()
 
@@ -152,21 +144,4 @@ BR.JG.BuildSettingsSection = function(settingsContent, setLayout, opts)
     setLayout:Add(suppressFoodHolder, nil, COMPONENT_GAP)
     setLayout:SetX(setX)
 
-    local repairMacroEnableHolder = Components.Checkbox(settingsContent, {
-        label = "Enable repair-click macro",
-        tooltip = {
-            title = "Repair icon click macro",
-            desc = "When enabled, clicking the Repair icon runs a secure macro out of combat.",
-        },
-        get = function()
-            local db = EnsureParityDB()
-            return db.enableRepairMacro == true
-        end,
-        onChange = function(checked)
-            local db = EnsureParityDB()
-            db.enableRepairMacro = checked
-            UpdateDisplay()
-        end,
-    })
-    setLayout:Add(repairMacroEnableHolder, nil, SECTION_GAP)
 end

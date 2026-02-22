@@ -16,7 +16,6 @@
 ## Features
 
 - **Click to cast** - Click missing buff icons to cast the spell directly (out of combat, spells your character can cast)
-- **Custom click actions** - Custom buffs can optionally use `Cast ID` (spell override) or `Item ID` (item/trinket click action)
 - **M+ support** - Detects missing buffs via action bar glow even when Blizzard's buff API is restricted
 - Class reminder when your buff is missing
 - Visual buff tracking with count overlay (e.g., "17/20" = 17 buffed out of 20)
@@ -31,20 +30,16 @@ This fork includes additive `Extensions/JG` parity modules plus targeted display
 
 - Soulstone parity behavior with expiration threshold logic
 - Healthstone parity behavior with charge threshold logic and Soulwell reminder handling
-- Repair/durability reminder with configurable threshold and optional click-to-repair macro
+- Repair/durability reminder with configurable threshold
 - Eating timer row with optional suppression of default food reminder while eating
 - Dedicated JG parity settings section in `/br` options
-- Custom category now supports `Click to cast` + `Hover highlight`
-- Custom buff editor supports optional `Cast ID` and `Item ID` (for cases where tracked aura spell differs from cast spell/item)
 
 Implementation files in this fork:
 
 - `Extensions/JG/Bootstrap.lua`
 - `Extensions/JG/PostRefresh.lua`
-- `Extensions/JG/ClickActions.lua`
 - `Extensions/JG/PetHover.lua`
 - `Extensions/JG/OptionsSection.lua`
-- `Display/SecureButtons.lua`
 - `Options/Options.lua`
 
 Additional details and reapply notes are documented in `Extensions/JG/README.md`.

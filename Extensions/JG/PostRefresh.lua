@@ -47,13 +47,6 @@ local function EnsureParityDB()
     if db.suppressFoodWhileEating == nil then
         db.suppressFoodWhileEating = true
     end
-    if db.enableRepairMacro == nil then
-        db.enableRepairMacro = false
-    end
-    if db.repairClickMacro == nil then
-        db.repairClickMacro = "/run if CanMerchantRepair() then RepairAllItems(false) end"
-    end
-
     return db
 end
 
