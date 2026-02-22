@@ -43,7 +43,7 @@ This document tracks the JG-specific code that remains after upstream resync.
   - `Extensions\\JG\\PostRefresh.lua`
   - `Extensions\\JG\\PetHover.lua`
   - `Extensions\\JG\\OptionsSection.lua`
-- Fork version suffix: `3.8.0-JG.6`.
+- Fork version suffix: `3.8.0-JG.7`.
 
 6. `Options/Options.lua`
 - Integrates extension settings by calling `BR.JG.BuildSettingsSection(...)`.

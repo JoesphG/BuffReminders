@@ -779,6 +779,37 @@ local function ShouldShowConsumableBuff(spellIDs, buffIconID, checkWeaponEnchant
     return true, nil -- Missing all consumable buffs/enchants/items
 end
 
+---Return true if any itemID in the list is in bags or equipped.
+---@param itemID number|number[]
+---@return boolean
+local function HasItemInBagsOrEquipped(itemID)
+    local itemList = type(itemID) == "table" and itemID or { itemID }
+    for _, id in ipairs(itemList) do
+        if type(id) == "number" and id > 0 then
+            -- Equipped check (all slots)
+            for slot = 1, 19 do
+                if GetInventoryItemID("player", slot) == id then
+                    return true
+                end
+            end
+
+            -- Bags check
+            if C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerItemID then
+                local maxBags = NUM_BAG_SLOTS or 4
+                for bag = 0, maxBags do
+                    local slots = C_Container.GetContainerNumSlots(bag)
+                    for slot = 1, slots do
+                        if C_Container.GetContainerItemID(bag, slot) == id then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 ---Check if buff passes common pre-conditions
 ---@param buff table Any buff type with optional pre-check fields
 ---@param presentClasses? table<ClassName, boolean>
@@ -1107,6 +1138,14 @@ function BuffState.Refresh()
         local settingKey = buff.groupId or buff.key
 
         local shouldProcess = IsBuffEnabled(settingKey) and customVisible
+
+        -- Optional item gate for custom buffs:
+        -- if an item action is configured, only show/process while the item exists
+        -- in bags or equipped.
+        local customItemGate = buff.itemID or buff.castItemID
+        if shouldProcess and customItemGate and not HasItemInBagsOrEquipped(customItemGate) then
+            shouldProcess = false
+        end
 
         -- If requireSpellKnown is true, check if player knows at least one spell
         if shouldProcess and buff.requireSpellKnown then

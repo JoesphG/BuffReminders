@@ -32,6 +32,19 @@ local function AbilityIconForSpec(specID)
     return nil
 end
 
+local function FirstNonEmptyString(info, keys)
+    if not info then
+        return nil
+    end
+    for _, key in ipairs(keys) do
+        local v = info[key]
+        if type(v) == "string" and v ~= "" then
+            return v
+        end
+    end
+    return nil
+end
+
 local function GetStableSpecID(info)
     if not info then
         return nil
@@ -48,7 +61,14 @@ local function GetHunterHoverMeta(spellID)
     if not info then
         return nil, nil
     end
-    local family = info.familyName or info.family
+    local family = FirstNonEmptyString(info, {
+        "familyName",
+        "family",
+        "petFamilyName",
+        "creatureFamily",
+        "speciesName",
+        "petTypeName",
+    })
     local hoverIcon = AbilityIconForSpec(GetStableSpecID(info))
     return hoverIcon, family
 end
@@ -62,6 +82,17 @@ local function EnsureHoverScripts(frame)
     frame:HookScript("OnEnter", function(self)
         if not self._jg_pet_spell_id then
             return
+        end
+
+        -- Stable info can populate late; refresh hunter family/icon on hover.
+        if self._jg_pet_is_hunter and (not self._jg_pet_family or self._jg_pet_family == "") then
+            local hoverIcon, family = GetHunterHoverMeta(self._jg_pet_spell_id)
+            if hoverIcon then
+                self._jg_pet_hover_icon = hoverIcon
+            end
+            if family and family ~= "" then
+                self._jg_pet_family = family
+            end
         end
 
         if self._jg_pet_hover_icon and self.icon and self.icon.GetTexture then
@@ -100,6 +131,7 @@ local function ClearHover(frame)
     frame._jg_pet_label = nil
     frame._jg_pet_family = nil
     frame._jg_pet_hover_icon = nil
+    frame._jg_pet_is_hunter = nil
     frame:EnableMouse(false)
     if GameTooltip and GameTooltip:IsOwned(frame) then
         GameTooltip:Hide()
@@ -117,8 +149,10 @@ local function ApplyHover(frame, action, class)
     frame._jg_pet_label = action.label
 
     if class == "HUNTER" then
+        frame._jg_pet_is_hunter = true
         frame._jg_pet_hover_icon, frame._jg_pet_family = GetHunterHoverMeta(action.spellID)
     else
+        frame._jg_pet_is_hunter = nil
         frame._jg_pet_hover_icon = nil
         frame._jg_pet_family = nil
     end

@@ -130,6 +130,22 @@ local function ScanEatingRemaining()
     return nil
 end
 
+local function HasFoodBuffAura()
+    local iconID = 136000 -- Shared Well Fed/food buff icon
+    local i = 1
+    while true do
+        local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+        if not aura then
+            break
+        end
+        if SafeNumber(aura.icon, nil) == iconID then
+            return true
+        end
+        i = i + 1
+    end
+    return false
+end
+
 local function LowestEquippedDurabilityPercent()
     local minPct = nil
     for slot = 1, 19 do
@@ -266,6 +282,13 @@ local function ProcessEatingTimer(db)
         return
     end
     if db.enableEatingTimer == false or UnitIsDeadOrGhost("player") then
+        HideEntry(entry)
+        return
+    end
+
+    -- As soon as a food buff is active, stop showing the eating timer icon.
+    -- This avoids overlap/flicker when the channel aura lingers briefly.
+    if HasFoodBuffAura() then
         HideEntry(entry)
         return
     end
