@@ -32,7 +32,7 @@ local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
 
 -- Categories that expose the "Click to cast" toggle (custom has per-buff actions instead)
-local CLICKABLE_CATEGORIES = { raid = true, presence = true, self = true, consumable = true, pet = true }
+local CLICKABLE_CATEGORIES = { raid = true, presence = true, targeted = true, self = true, consumable = true, pet = true }
 
 -- Glow module
 local Glow = BR.Glow
@@ -569,6 +569,93 @@ local function CreateOptionsPanel()
     buffsLeftY = buffsLeftY - 14
     buffsLeftY = RenderBuffCheckboxes(buffsContent, buffsLeftX, buffsLeftY, TargetedBuffs)
     buffsLeftY = buffsLeftY - SECTION_SPACING
+
+    -- Targeting behavior
+    _, buffsLeftY = CreateSectionHeader(buffsContent, "Targeting", buffsLeftX, buffsLeftY)
+    local targetingNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    targetingNote:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    targetingNote:SetText("(sticky targeting and Earth Shield icon behavior)")
+    buffsLeftY = buffsLeftY - 14
+
+    local stickyTargetHolder = Components.Checkbox(buffsContent, {
+        label = "Enable sticky targeting",
+        get = function()
+            if not BuffRemindersDB.targeting then
+                return true
+            end
+            return BuffRemindersDB.targeting.enableStickyTargeting ~= false
+        end,
+        onChange = function(checked)
+            if not BuffRemindersDB.targeting then
+                BuffRemindersDB.targeting = {}
+            end
+            BuffRemindersDB.targeting.enableStickyTargeting = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    stickyTargetHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT
+
+    local esPlayerHolder = Components.Checkbox(buffsContent, {
+        label = "Show Earth Shield player icon",
+        get = function()
+            if not BuffRemindersDB.earthShieldOverride then
+                return true
+            end
+            return BuffRemindersDB.earthShieldOverride.showPlayerIcon ~= false
+        end,
+        onChange = function(checked)
+            if not BuffRemindersDB.earthShieldOverride then
+                BuffRemindersDB.earthShieldOverride = {}
+            end
+            BuffRemindersDB.earthShieldOverride.showPlayerIcon = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    esPlayerHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT
+
+    local esTargetHolder = Components.Checkbox(buffsContent, {
+        label = "Show Earth Shield target icon",
+        get = function()
+            if not BuffRemindersDB.earthShieldOverride then
+                return true
+            end
+            return BuffRemindersDB.earthShieldOverride.showTargetIcon ~= false
+        end,
+        onChange = function(checked)
+            if not BuffRemindersDB.earthShieldOverride then
+                BuffRemindersDB.earthShieldOverride = {}
+            end
+            BuffRemindersDB.earthShieldOverride.showTargetIcon = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    esTargetHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT
+
+    local esSoloHolder = Components.Checkbox(buffsContent, {
+        label = "Hide ES target icon when solo",
+        get = function()
+            if not BuffRemindersDB.earthShieldOverride then
+                return true
+            end
+            return BuffRemindersDB.earthShieldOverride.disableTargetWhenSolo ~= false
+        end,
+        onChange = function(checked)
+            if not BuffRemindersDB.earthShieldOverride then
+                BuffRemindersDB.earthShieldOverride = {}
+            end
+            BuffRemindersDB.earthShieldOverride.disableTargetWhenSolo = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    esSoloHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT - SECTION_SPACING
 
     -- Consumables
     _, buffsLeftY = CreateSectionHeader(buffsContent, "Consumables", buffsLeftX, buffsLeftY)

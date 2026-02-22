@@ -95,6 +95,33 @@ local function ResolveCustomClickAction(buff)
     return nil, nil
 end
 
+---Build macro text for targeted buffs.
+---Order: sticky target (if any), then mouseover, then target, then default cast.
+---@param spellID number
+---@param buffKey string?
+---@return string
+local function BuildTargetedMacro(spellID, buffKey)
+    local spellName = GetSpellInfo(spellID)
+    if not spellName then
+        return "/cast " .. tostring(spellID)
+    end
+    if buffKey == "earthShieldPlayer" then
+        return "/cast [@player] " .. spellName
+    end
+
+    local stickyTarget = nil
+    if BR.StateHelpers and BR.StateHelpers.GetStickyTarget and buffKey then
+        stickyTarget = BR.StateHelpers.GetStickyTarget(buffKey)
+    end
+
+    local lines = {}
+    if stickyTarget then
+        lines[#lines + 1] = "/cast [@" .. stickyTarget .. ",help,nodead] " .. spellName
+    end
+    lines[#lines + 1] = "/cast [@mouseover,help,nodead][@target,help,nodead][] " .. spellName
+    return table.concat(lines, "\n")
+end
+
 -- ============================================================================
 -- CLICK-TO-CAST OVERLAY
 -- ============================================================================
@@ -122,7 +149,10 @@ local function CreateClickOverlay(frame)
     -- Re-evaluate dynamic macros before each click, refresh display after
     overlay:SetScript("PreClick", function(self)
         if self._br_clickMacroFn then
-            self:SetAttribute("macrotext", self._br_clickMacroFn(self._br_clickMacroSpellID))
+            self:SetAttribute(
+                "macrotext",
+                self._br_clickMacroFn(self._br_clickMacroSpellID, self._br_clickMacroBuffKey)
+            )
         end
     end)
     overlay:SetScript("PostClick", function(self)
@@ -464,7 +494,8 @@ local function SyncSecureButtons()
             local cs = frame.buffCategory
                 and BuffRemindersDB.categorySettings
                 and BuffRemindersDB.categorySettings[frame.buffCategory]
-            local clickable = cs and cs.clickable == true
+            local clickable = (frame.buffCategory == "targeted" and cs and cs.clickable ~= false)
+                or (frame.buffCategory ~= "targeted" and cs and cs.clickable == true)
             -- Custom buffs with per-buff click actions are individually clickable
             if not clickable and frame.buffCategory == "custom" and frame.buffDef then
                 local def = frame.buffDef
@@ -624,7 +655,8 @@ local function SyncSecureButtons()
                         local extraCs = frame.buffCategory
                             and BuffRemindersDB.categorySettings
                             and BuffRemindersDB.categorySettings[frame.buffCategory]
-                        local extraClickable = extraCs and extraCs.clickable == true
+                        local extraClickable = (frame.buffCategory == "targeted" and extraCs and extraCs.clickable ~= false)
+                            or (frame.buffCategory ~= "targeted" and extraCs and extraCs.clickable == true)
                         if not extraClickable then
                             extraOverlay:EnableMouse(false)
                             extraOverlay:Hide()
@@ -693,7 +725,8 @@ local function UpdateActionButtons(category)
 
     local db = BuffRemindersDB
     local cs = db.categorySettings and db.categorySettings[category]
-    local enabled = cs and cs.clickable == true
+    local enabled = (category == "targeted" and cs and cs.clickable ~= false)
+        or (category ~= "targeted" and cs and cs.clickable == true)
     local showHighlight = enabled and (cs.clickableHighlight ~= false)
 
     for _, frame in pairs(BR.Display.frames) do
@@ -795,6 +828,10 @@ local function UpdateActionButtons(category)
                     local customActionType, customActionValue
                     if frame._br_pet_spell then
                         castableID = frame._br_pet_spell
+                    elseif category == "targeted" then
+                        castableID = GetCastableSpellID(
+                            (frame.buffDef and frame.buffDef.castSpellID) or (frame.buffDef and frame.buffDef.spellID)
+                        )
                     elseif category == "custom" then
                         customActionType, customActionValue = ResolveCustomClickAction(frame.buffDef)
                         if customActionType == "spell" then
@@ -815,6 +852,7 @@ local function UpdateActionButtons(category)
                         overlay.itemID = nil
                         overlay._br_clickMacroFn = nil
                         overlay._br_clickMacroSpellID = nil
+                        overlay._br_clickMacroBuffKey = nil
                         if customActionType == "macro" then
                             overlay:SetAttribute("type", "macro")
                             overlay:SetAttribute("macrotext", customActionValue:gsub("\\n", "\n"))
@@ -834,14 +872,22 @@ local function UpdateActionButtons(category)
                         local overlay = frame.clickOverlay
                         overlay._br_has_action = true
                         overlay.itemID = nil
-                        if frame.buffDef and frame.buffDef.clickMacro then
+                        if category == "targeted" then
+                            overlay._br_clickMacroFn = BuildTargetedMacro
+                            overlay._br_clickMacroSpellID = castableID
+                            overlay._br_clickMacroBuffKey = frame.key
+                            overlay:SetAttribute("type", "macro")
+                            overlay:SetAttribute("macrotext", BuildTargetedMacro(castableID, frame.key))
+                        elseif frame.buffDef and frame.buffDef.clickMacro then
                             overlay._br_clickMacroFn = frame.buffDef.clickMacro
                             overlay._br_clickMacroSpellID = castableID
+                            overlay._br_clickMacroBuffKey = nil
                             overlay:SetAttribute("type", "macro")
                             overlay:SetAttribute("macrotext", frame.buffDef.clickMacro(castableID))
                         else
                             overlay._br_clickMacroFn = nil
                             overlay._br_clickMacroSpellID = nil
+                            overlay._br_clickMacroBuffKey = nil
                             overlay:SetAttribute("type", "spell")
                             overlay:SetAttribute("spell", castableID)
                             overlay:SetAttribute("unit", category == "raid" and "player" or nil)
@@ -852,6 +898,9 @@ local function UpdateActionButtons(category)
                         end
                     elseif frame.clickOverlay then
                         frame.clickOverlay._br_has_action = false
+                        frame.clickOverlay._br_clickMacroFn = nil
+                        frame.clickOverlay._br_clickMacroSpellID = nil
+                        frame.clickOverlay._br_clickMacroBuffKey = nil
                         frame.clickOverlay:EnableMouse(false)
                         frame.clickOverlay:Hide()
                         frame.clickOverlay._br_left = nil

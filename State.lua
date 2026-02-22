@@ -111,6 +111,17 @@ local currentValidUnits = {}
 local unitEntryPool = {}
 local unitEntryPoolSize = 0
 
+---Get a unit's full name (with realm when available), normalized for macro targeting.
+---@param unit string
+---@return string?
+local function GetNormalizedUnitName(unit)
+    local name = GetUnitName(unit, true)
+    if name and name ~= "" then
+        return name
+    end
+    return nil
+end
+
 ---Get a unit entry from the pool or create a new one
 ---@param unit string
 ---@param class string
@@ -501,37 +512,15 @@ local function HasPresenceBuff(spellIDs, playerOnly)
     return found, minRemaining
 end
 
----Check if player's buff is active on anyone in the group
----Uses currentValidUnits cache built at start of refresh cycle
----@param spellID number
----@param role? RoleType Only check units with this role
----@return boolean
----@return number? minRemaining
-local function IsPlayerBuffActive(spellID, role)
-    local minRemaining = nil
-    for _, data in ipairs(currentValidUnits) do
-        if not role or UnitGroupRolesAssigned(data.unit) == role then
-            local hasBuff, remaining, sourceUnit = UnitHasBuff(data.unit, spellID)
-            if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
-                if not remaining then
-                    return true, nil -- no expiration, no need to keep scanning
-                end
-                if not minRemaining or remaining < minRemaining then
-                    minRemaining = remaining
-                end
-            end
-        end
-    end
-    return minRemaining ~= nil, minRemaining
-end
-
 ---Check if player should cast their targeted buff (returns true if a beneficiary needs it)
 ---@param spellIDs SpellID
 ---@param requiredClass ClassName
 ---@param beneficiaryRole? RoleType
+---@param buffKey? string
+---@param excludePlayer? boolean
 ---@return boolean? shouldShow Returns nil if player can't provide this buff
 ---@return number? remainingTime
-local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, requireSpecId)
+local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, requireSpecId, buffKey, excludePlayer)
     if playerClass ~= requiredClass then
         return nil
     end
@@ -549,7 +538,41 @@ local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, 
         return nil
     end
 
-    local isActive, remaining = IsPlayerBuffActive(spellID, beneficiaryRole)
+    local minRemaining = nil
+    local stickyUnitName = nil
+    local found = false
+    for _, data in ipairs(currentValidUnits) do
+        if (not beneficiaryRole or UnitGroupRolesAssigned(data.unit) == beneficiaryRole) and (not excludePlayer or not data.isPlayer) then
+            local hasBuff, remaining, sourceUnit = UnitHasBuff(data.unit, spellID)
+            if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
+                found = true
+                if not data.isPlayer and not stickyUnitName then
+                    stickyUnitName = GetNormalizedUnitName(data.unit)
+                end
+                if not remaining then
+                    minRemaining = nil
+                    break
+                end
+                if not minRemaining or remaining < minRemaining then
+                    minRemaining = remaining
+                end
+            end
+        end
+    end
+
+    if buffKey and BuffRemindersDB and BuffRemindersDB.targeting and BuffRemindersDB.targeting.enableStickyTargeting then
+        if not BuffRemindersDB.stickyTargets then
+            BuffRemindersDB.stickyTargets = {}
+        end
+        if stickyUnitName then
+            BuffRemindersDB.stickyTargets[buffKey] = stickyUnitName
+        elseif found then
+            BuffRemindersDB.stickyTargets[buffKey] = nil
+        end
+    end
+
+    local isActive = found
+    local remaining = minRemaining
     return not isActive, remaining
 end
 
@@ -699,6 +722,74 @@ local function UpdateEatingState(updateInfo)
             end
         end
     end
+end
+
+---Ensure targeting-related DB tables/flags exist.
+---@param db table
+local function EnsureTargetingDB(db)
+    if not db.targeting then
+        db.targeting = {}
+    end
+    if db.targeting.enableStickyTargeting == nil then
+        db.targeting.enableStickyTargeting = true
+    end
+
+    if not db.earthShieldOverride then
+        db.earthShieldOverride = {}
+    end
+    if db.earthShieldOverride.showPlayerIcon == nil then
+        db.earthShieldOverride.showPlayerIcon = true
+    end
+    if db.earthShieldOverride.showTargetIcon == nil then
+        db.earthShieldOverride.showTargetIcon = true
+    end
+    if db.earthShieldOverride.disableTargetWhenSolo == nil then
+        db.earthShieldOverride.disableTargetWhenSolo = true
+    end
+
+    if not db.stickyTargets then
+        db.stickyTargets = {}
+    end
+end
+
+---Remove sticky targets that are no longer valid group members.
+---@param db table
+local function PruneStickyTargets(db)
+    if not db.stickyTargets then
+        return
+    end
+    local validNames = {}
+    for _, data in ipairs(currentValidUnits) do
+        if not data.isPlayer then
+            local fullName = GetNormalizedUnitName(data.unit)
+            if fullName then
+                validNames[fullName] = true
+            end
+        end
+    end
+    for buffKey, unitName in pairs(db.stickyTargets) do
+        if not validNames[unitName] then
+            db.stickyTargets[buffKey] = nil
+        end
+    end
+end
+
+---Get sticky target unit name for a buff key.
+---@param buffKey string
+---@return string?
+local function GetStickyTarget(buffKey)
+    local db = BuffRemindersDB
+    if not db or not db.targeting or not db.targeting.enableStickyTargeting then
+        return nil
+    end
+    if not db.stickyTargets then
+        return nil
+    end
+    local unitName = db.stickyTargets[buffKey]
+    if type(unitName) ~= "string" or unitName == "" then
+        return nil
+    end
+    return unitName
 end
 
 ---Check if player is missing a consumable buff, weapon enchant, or inventory item (returns true if missing)
@@ -926,6 +1017,7 @@ function BuffState.Refresh()
 
     -- Invalidate off-hand weapon cache each refresh cycle (cheap lazy re-check)
     cachedHasOffHandWeapon = nil
+    EnsureTargetingDB(db)
 
     -- Reset all entries to not visible
     for _, entry in pairs(BuffState.entries) do
@@ -941,6 +1033,7 @@ function BuffState.Refresh()
 
     -- Build valid unit cache once per refresh cycle
     BuildValidUnitCache()
+    PruneStickyTargets(db)
 
     -- Fetch weapon enchant info once per refresh cycle
     local hasMain, mainExp, _, mainID, hasOff, offExp, _, offID = GetWeaponEnchantInfo()
@@ -1019,10 +1112,45 @@ function BuffState.Refresh()
     for i, buff in ipairs(TargetedBuffs) do
         local entry = GetOrCreateEntry(buff.key, "targeted", i)
         local settingKey = GetBuffSettingKey(buff)
+        local shouldProcess = IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db)
 
-        if IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db) then
-            local shouldShow, remaining =
-                ShouldShowTargetedBuff(buff.spellID, buff.class, buff.beneficiaryRole, buff.requireSpecId)
+        if shouldProcess and buff.key == "earthShieldPlayer" then
+            shouldProcess = db.earthShieldOverride.showPlayerIcon ~= false
+        end
+        if shouldProcess and buff.key == "earthShieldOthers" then
+            shouldProcess = db.earthShieldOverride.showTargetIcon ~= false
+                and not (db.earthShieldOverride.disableTargetWhenSolo and GetNumGroupMembers() == 0)
+        end
+
+        if shouldProcess then
+            local shouldShow, remaining
+            if buff.key == "earthShieldPlayer" then
+                shouldShow = ShouldShowSelfBuff(
+                    buff.spellID,
+                    buff.class,
+                    nil,
+                    buff.requiresSpellID,
+                    buff.excludeSpellID,
+                    buff.buffIdOverride,
+                    buff.customCheck,
+                    buff.requireSpecId,
+                    nil,
+                    nil
+                )
+                if shouldShow == false then
+                    local _, rem = UnitHasBuff("player", buff.buffIdOverride or buff.spellID)
+                    remaining = rem
+                end
+            else
+                shouldShow, remaining = ShouldShowTargetedBuff(
+                    buff.spellID,
+                    buff.class,
+                    buff.beneficiaryRole,
+                    buff.requireSpecId,
+                    buff.key,
+                    buff.key == "earthShieldOthers"
+                )
+            end
 
             if shouldShow then
                 SetEntryMissing(entry, buff.missingText, targGlowMissing)
@@ -1289,6 +1417,7 @@ BR.StateHelpers = {
     IsCategoryVisibleForContent = IsCategoryVisibleForContent,
     GetBuffSettingKey = GetBuffSettingKey,
     IsBuffEnabled = IsBuffEnabled,
+    GetStickyTarget = GetStickyTarget,
 }
 
 -- Export the module
