@@ -2794,20 +2794,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         end
         db.dbVersion = DB_VERSION
 
-        -- One-time self buffs click-to-cast notice
-        if not db.selfClickNoticeShown then
-            db.selfClickNoticeShown = true
-            C_Timer.After(5, function()
-                if BuffRemindersDB.showLoginMessages ~= false then
-                    print(
-                        "|cff00ccffBuffReminders:|r Self buffs now support clickable icons! Enable it in |cffffcc00/br|r under the Self category."
-                    )
-                end
-            end)
-        end
-
         -- Clean up old one-time notice flags
         db.glowUpdateNoticeShown = nil
+        db.selfClickNoticeShown = nil
 
         -- Deep copy defaults for non-defaults tables
         DeepCopyDefault(defaults, db)
