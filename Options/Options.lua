@@ -2742,7 +2742,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         { value = "whenNotGlowing", label = "Detect when not glowing" },
         { value = "disabled", label = "Disabled" },
     }
-    local currentGlowMode = editingBuff and editingBuff.glowMode or "whenGlowing"
+    local currentGlowMode = editingBuff and editingBuff.glowMode or "disabled"
     glowModeDropdown = Components.Dropdown(sectionsFrame, {
         label = "Bar glow:",
         options = glowModeOptions,
@@ -3030,7 +3030,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             requireSpecId = specDropdownHolder and specDropdownHolder:GetValue() or nil,
             showWhenPresent = showIconToggle:GetChecked() or nil,
             requireSpellKnown = requireSpellKnownToggle:GetChecked() or nil,
-            glowMode = glowModeDropdown:GetValue() ~= "whenGlowing" and glowModeDropdown:GetValue() or nil,
+            glowMode = glowModeDropdown:GetValue() ~= "disabled" and glowModeDropdown:GetValue() or nil,
             castSpellID = castSpellIDValue,
             castItemID = castItemIDValue,
             castMacro = castMacroValue,
