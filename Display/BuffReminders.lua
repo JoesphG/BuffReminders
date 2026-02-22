@@ -1593,6 +1593,7 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
         -- Not sub_icons: hide any leftover sub-icon buttons
         BR.SecureButtons.UpdateConsumableButtons(frame, nil)
         if displayMode == "expanded" and items and #items > 1 then
+            local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
             for i = 2, #items do
                 local extra = GetOrCreateExtraFrame(frame, i - 1)
                 extra:SetParent(parentFrame)
@@ -1605,6 +1606,7 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
                 extra.stackCount:Show()
                 extra.count:Hide()
                 extra:Show()
+                SetExpirationGlow(extra, entry.shouldGlow, entry.category, cachedGlow)
                 frameList[#frameList + 1] = extra
             end
         end
@@ -1630,6 +1632,7 @@ local function ExpandPetActions(frame, entry, frameList)
     frame._br_pet_spell = first.spellName
 
     -- Extra frames for remaining actions
+    local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
     for i = 2, #entry.petActions do
         local action = entry.petActions[i]
         local extra = GetOrCreateExtraFrame(frame, i - 1)
@@ -1640,6 +1643,7 @@ local function ExpandPetActions(frame, entry, frameList)
         extra.stackCount:Hide()
         extra._br_pet_spell = action.spellName
         extra:Show()
+        SetExpirationGlow(extra, entry.shouldGlow, entry.category, cachedGlow)
         if frameList then
             frameList[#frameList + 1] = extra
         end
