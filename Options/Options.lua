@@ -3,7 +3,7 @@ local _, BR = ...
 -- ============================================================================
 -- OPTIONS PANEL
 -- ============================================================================
--- Simplified 3-tab layout: Buffs, Appearance, Settings
+-- Simplified 3-tab layout: Buffs, Display/Behavior, Settings
 
 -- Aliases from BR namespace
 local Components = BR.Components
@@ -285,16 +285,17 @@ local function CreateOptionsPanel()
         end
     end
 
-    -- Create 4 tabs: Buffs, Display, Settings, Import/Export
+    -- Create 4 tabs: Buffs, Display & Behavior, Settings, Import/Export
     tabButtons.buffs = Components.Tab(panel, { name = "buffs", label = "Buffs", width = 50 })
-    tabButtons.appearance = Components.Tab(panel, { name = "appearance", label = "Display", width = 60 })
+    tabButtons.displayBehavior =
+        Components.Tab(panel, { name = "displayBehavior", label = "Display/Behavior", width = 110 })
     tabButtons.settings = Components.Tab(panel, { name = "settings", label = "Settings", width = 65 })
     tabButtons.profiles = Components.Tab(panel, { name = "profiles", label = "Import/Export", width = 95 })
 
     -- Position tabs below title
     tabButtons.buffs:SetPoint("TOPLEFT", panel, "TOPLEFT", COL_PADDING, -30)
-    tabButtons.appearance:SetPoint("LEFT", tabButtons.buffs, "RIGHT", 2, 0)
-    tabButtons.settings:SetPoint("LEFT", tabButtons.appearance, "RIGHT", 2, 0)
+    tabButtons.displayBehavior:SetPoint("LEFT", tabButtons.buffs, "RIGHT", 2, 0)
+    tabButtons.settings:SetPoint("LEFT", tabButtons.displayBehavior, "RIGHT", 2, 0)
     tabButtons.profiles:SetPoint("LEFT", tabButtons.settings, "RIGHT", 2, 0)
 
     for name, tab in pairs(tabButtons) do
@@ -349,7 +350,7 @@ local function CreateOptionsPanel()
         icon = "QuestNormal",
         color = "orange",
         visible = function()
-            return IsMasqueActive() and activeTabName == "appearance"
+            return IsMasqueActive() and activeTabName == "displayBehavior"
         end,
     })
 
@@ -685,22 +686,22 @@ local function CreateOptionsPanel()
     panel.RenderCustomBuffRows = RenderCustomBuffRows
     RenderCustomBuffRows()
 
-    -- ========== APPEARANCE TAB ==========
-    local appearanceContent, _ = CreateScrollableContent("appearance")
-    local appX = COL_PADDING
-    local appLayout = Components.VerticalLayout(appearanceContent, { x = appX, y = -10 })
+    -- ========== DISPLAY/BEHAVIOR TAB ==========
+    local displayBehaviorContent, _ = CreateScrollableContent("displayBehavior")
+    local displayBehaviorX = COL_PADDING
+    local displayBehaviorLayout = Components.VerticalLayout(displayBehaviorContent, { x = displayBehaviorX, y = -10 })
 
     -- Global Defaults section
-    LayoutSectionHeader(appLayout, appearanceContent, "Global Defaults")
+    LayoutSectionHeader(displayBehaviorLayout, displayBehaviorContent, "Global Defaults")
 
-    local defNote = appearanceContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    appLayout:AddText(defNote, 12, COMPONENT_GAP)
+    local defNote = displayBehaviorContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    displayBehaviorLayout:AddText(defNote, 12, COMPONENT_GAP)
     defNote:SetText("(All categories inherit these unless overridden)")
 
     -- Fixed column layout: all sliders use default labelWidth (70)
     local DEF_COL2 = 260 -- labelWidth(70) + sliderWidth(100) + value(60) + gap(30)
 
-    local defSizeHolder = Components.Slider(appearanceContent, {
+    local defSizeHolder = Components.Slider(displayBehaviorContent, {
         label = "Icon Size",
         min = 16,
         max = 128,
@@ -712,7 +713,7 @@ local function CreateOptionsPanel()
         end,
     })
 
-    local defZoomHolder = Components.Slider(appearanceContent, {
+    local defZoomHolder = Components.Slider(displayBehaviorContent, {
         label = "Icon Zoom",
         min = 0,
         max = 15,
@@ -727,9 +728,12 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.iconZoom", val)
         end,
     })
-    appLayout:AddRow({ { defSizeHolder, appX }, { defZoomHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
+    displayBehaviorLayout:AddRow(
+        { { defSizeHolder, displayBehaviorX }, { defZoomHolder, displayBehaviorX + DEF_COL2 } },
+        COMPONENT_GAP
+    )
 
-    local defBorderHolder = Components.Slider(appearanceContent, {
+    local defBorderHolder = Components.Slider(displayBehaviorContent, {
         label = "Border",
         min = 0,
         max = 8,
@@ -745,7 +749,7 @@ local function CreateOptionsPanel()
         end,
     })
 
-    local defAlphaHolder = Components.Slider(appearanceContent, {
+    local defAlphaHolder = Components.Slider(displayBehaviorContent, {
         label = "Alpha",
         min = 10,
         max = 100,
@@ -757,9 +761,12 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.iconAlpha", val / 100)
         end,
     })
-    appLayout:AddRow({ { defBorderHolder, appX }, { defAlphaHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
+    displayBehaviorLayout:AddRow(
+        { { defBorderHolder, displayBehaviorX }, { defAlphaHolder, displayBehaviorX + DEF_COL2 } },
+        COMPONENT_GAP
+    )
 
-    local defSpacingHolder = Components.Slider(appearanceContent, {
+    local defSpacingHolder = Components.Slider(displayBehaviorContent, {
         label = "Spacing",
         min = 0,
         max = 50,
@@ -772,7 +779,7 @@ local function CreateOptionsPanel()
         end,
     })
 
-    local defTextSizeHolder = Components.NumericStepper(appearanceContent, {
+    local defTextSizeHolder = Components.NumericStepper(displayBehaviorContent, {
         label = "Text",
         min = 6,
         max = 32,
@@ -790,7 +797,7 @@ local function CreateOptionsPanel()
         end,
     })
 
-    local defTextColorHolder = Components.ColorSwatch(appearanceContent, {
+    local defTextColorHolder = Components.ColorSwatch(displayBehaviorContent, {
         hasOpacity = true,
         get = function()
             local tc = BuffRemindersDB.defaults and BuffRemindersDB.defaults.textColor or { 1, 1, 1 }
@@ -804,7 +811,10 @@ local function CreateOptionsPanel()
             })
         end,
     })
-    appLayout:AddRow({ { defSpacingHolder, appX }, { defTextSizeHolder, appX + DEF_COL2 } }, COMPONENT_GAP)
+    displayBehaviorLayout:AddRow(
+        { { defSpacingHolder, displayBehaviorX }, { defTextSizeHolder, displayBehaviorX + DEF_COL2 } },
+        COMPONENT_GAP
+    )
     defTextColorHolder:SetPoint("LEFT", defTextSizeHolder, "RIGHT", 12, 0) -- aligns alpha % with slider values
 
     -- Font dropdown (global setting, uses LibSharedMedia)
@@ -817,7 +827,7 @@ local function CreateOptionsPanel()
         return opts
     end
 
-    local defFontHolder = Components.Dropdown(appearanceContent, {
+    local defFontHolder = Components.Dropdown(displayBehaviorContent, {
         label = "Font:",
         labelWidth = 70,
         options = BuildFontOptions(),
@@ -838,9 +848,9 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.fontFace", val)
         end,
     })
-    appLayout:Add(defFontHolder, nil, COMPONENT_GAP)
+    displayBehaviorLayout:Add(defFontHolder, nil, COMPONENT_GAP)
 
-    local defDirHolder = Components.DirectionButtons(appearanceContent, {
+    local defDirHolder = Components.DirectionButtons(displayBehaviorContent, {
         labelWidth = 70,
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.growDirection or "CENTER"
@@ -849,18 +859,18 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.growDirection", dir)
         end,
     })
-    appLayout:Add(defDirHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+    displayBehaviorLayout:Add(defDirHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
     -- Expiration Glow section
-    LayoutSectionHeader(appLayout, appearanceContent, "Expiration Glow")
-    appLayout:Space(COMPONENT_GAP)
+    LayoutSectionHeader(displayBehaviorLayout, displayBehaviorContent, "Expiration Glow")
+    displayBehaviorLayout:Space(COMPONENT_GAP)
 
-    local previewBtn = CreateButton(appearanceContent, "Preview", function()
+    local previewBtn = CreateButton(displayBehaviorContent, "Preview", function()
         ShowGlowDemo()
     end)
-    appLayout:Add(previewBtn, nil, SECTION_GAP)
+    displayBehaviorLayout:Add(previewBtn, nil, SECTION_GAP)
 
-    local defGlowHolder = Components.Checkbox(appearanceContent, {
+    local defGlowHolder = Components.Checkbox(displayBehaviorContent, {
         label = "Glow",
         get = function()
             return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
@@ -875,7 +885,7 @@ local function CreateOptionsPanel()
         return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
     end
 
-    local defThresholdHolder = Components.Slider(appearanceContent, {
+    local defThresholdHolder = Components.Slider(displayBehaviorContent, {
         min = 1,
         max = 45,
         step = 5,
@@ -895,7 +905,7 @@ local function CreateOptionsPanel()
         typeOptions[i] = { label = gt.name, value = i }
     end
 
-    local defTypeHolder = Components.Dropdown(appearanceContent, {
+    local defTypeHolder = Components.Dropdown(displayBehaviorContent, {
         label = "Type:",
         labelWidth = 34,
         options = typeOptions,
@@ -910,7 +920,7 @@ local function CreateOptionsPanel()
     }, "BuffRemindersDefGlowTypeDropdown")
     defTypeHolder:SetPoint("LEFT", defThresholdHolder, "RIGHT", 8, 0)
 
-    local defUseCustomColorHolder = Components.Checkbox(appearanceContent, {
+    local defUseCustomColorHolder = Components.Checkbox(displayBehaviorContent, {
         label = "Color",
         tooltip = "Use a custom glow color instead of the default.\nWhen off, glows use the native library color which looks more vibrant.",
         get = function()
@@ -923,7 +933,7 @@ local function CreateOptionsPanel()
         end,
     })
 
-    local defGlowColorHolder = Components.ColorSwatch(appearanceContent, {
+    local defGlowColorHolder = Components.ColorSwatch(displayBehaviorContent, {
         hasOpacity = true,
         get = function()
             local c = BR.Config.Get("defaults.glowColor", Glow.DEFAULT_COLOR)
@@ -938,7 +948,7 @@ local function CreateOptionsPanel()
         end,
     })
 
-    local defGlowSizeHolder = Components.NumericStepper(appearanceContent, {
+    local defGlowSizeHolder = Components.NumericStepper(displayBehaviorContent, {
         label = "Size:",
         labelWidth = 34,
         min = 1,
@@ -952,9 +962,9 @@ local function CreateOptionsPanel()
             BR.Config.Set("defaults.glowSize", val)
         end,
     })
-    appLayout:Add(defGlowHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
+    displayBehaviorLayout:Add(defGlowHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)
 
-    local defGlowWhenMissingHolder = Components.Checkbox(appearanceContent, {
+    local defGlowWhenMissingHolder = Components.Checkbox(displayBehaviorContent, {
         label = "Also when missing",
         tooltip = "Show glow on buff icons that are completely missing, not just expiring.",
         get = function()
@@ -970,11 +980,11 @@ local function CreateOptionsPanel()
     defGlowSizeHolder:SetPoint("TOP", defGlowWhenMissingHolder, "TOP")
     defUseCustomColorHolder:SetPoint("LEFT", defGlowSizeHolder, "RIGHT", 6, 0)
     defGlowColorHolder:SetPoint("LEFT", defUseCustomColorHolder.label, "RIGHT", 4, 0)
-    appLayout:Space(20 + COMPONENT_GAP)
+    displayBehaviorLayout:Space(20 + COMPONENT_GAP)
 
     -- Per-Category Customization section
-    LayoutSectionHeader(appLayout, appearanceContent, "Per-Category Customization")
-    appLayout:Space(COMPONENT_GAP)
+    LayoutSectionHeader(displayBehaviorLayout, displayBehaviorContent, "Per-Category Customization")
+    displayBehaviorLayout:Space(COMPONENT_GAP)
 
     -- Create collapsible sections that chain-anchor to each other
     local categorySections = {}
@@ -982,16 +992,16 @@ local function CreateOptionsPanel()
 
     local function UpdateAppearanceContentHeight()
         -- Calculate total height: fixed header area + all collapsible sections
-        local totalHeight = math.abs(appLayout:GetY())
+        local totalHeight = math.abs(displayBehaviorLayout:GetY())
         for _, sec in ipairs(categorySections) do
             totalHeight = totalHeight + sec:GetHeight() + 4
         end
-        appearanceContent:SetHeight(totalHeight)
+        displayBehaviorContent:SetHeight(totalHeight)
     end
 
     local SECTION_SCROLLBAR_OFFSET = COL_PADDING
     for _, category in ipairs(CATEGORY_ORDER) do
-        local section = Components.CollapsibleSection(appearanceContent, {
+        local section = Components.CollapsibleSection(displayBehaviorContent, {
             title = CATEGORY_LABELS[category],
             defaultCollapsed = true,
             scrollbarOffset = SECTION_SCROLLBAR_OFFSET,
@@ -1004,7 +1014,7 @@ local function CreateOptionsPanel()
         if previousSection then
             section:SetPoint("TOPLEFT", previousSection, "BOTTOMLEFT", 0, -4)
         else
-            section:SetPoint("TOPLEFT", appX, appLayout:GetY())
+            section:SetPoint("TOPLEFT", displayBehaviorX, displayBehaviorLayout:GetY())
         end
 
         local catContent = section:GetContentFrame()
@@ -2032,7 +2042,7 @@ local function CreateOptionsPanel()
     local setLayout = Components.VerticalLayout(settingsContent, { x = setX, y = -10 })
 
     -- General Settings section
-    LayoutSectionHeader(setLayout, settingsContent, "Display Behavior")
+    LayoutSectionHeader(setLayout, settingsContent, "Visibility")
 
     local groupHolder = Components.Checkbox(settingsContent, {
         label = "Show only in group/raid",
