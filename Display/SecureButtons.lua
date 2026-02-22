@@ -38,6 +38,9 @@ end
 ---@param buff table The buff definition table
 ---@return number?
 local function GetActionSpellID(buff)
+    if buff.castOnOthers then
+        return nil
+    end
     if buff.excludeSpellID and IsPlayerSpell(buff.excludeSpellID) then
         return nil
     end

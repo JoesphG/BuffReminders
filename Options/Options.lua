@@ -31,6 +31,9 @@ local SelfBuffs = BUFF_TABLES.self
 local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
 
+-- Categories that expose the "Click to cast" toggle (custom has per-buff actions instead)
+local CLICKABLE_CATEGORIES = { raid = true, presence = true, self = true, consumable = true, pet = true }
+
 -- Glow module
 local Glow = BR.Glow
 local GlowTypes = Glow.Types
@@ -1092,7 +1095,7 @@ local function CreateOptionsPanel()
         end
 
         -- Click to cast checkbox
-        if category == "raid" or category == "self" or category == "consumable" or category == "pet" then
+        if CLICKABLE_CATEGORIES[category] then
             local clickableHolder = Components.Checkbox(catContent, {
                 label = "Click to cast",
                 get = function()

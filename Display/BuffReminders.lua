@@ -316,7 +316,7 @@ local defaults = {
             position = { point = "CENTER", x = 0, y = 20 },
             useCustomAppearance = false,
             split = false,
-            clickable = false,
+            clickable = true,
             clickableHighlight = true,
             priority = 2,
         },
