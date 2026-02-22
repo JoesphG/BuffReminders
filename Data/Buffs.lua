@@ -94,8 +94,12 @@ local _, BR = ...
 ---@field missingText? string
 ---@field class? ClassName
 ---@field requireSpecId? number
+---@field requireSpellKnown? boolean -- Only show if player knows at least one of the tracked spells
 ---@field showWhenPresent? boolean  -- Show icon when buff IS on player (default: show when missing)
 ---@field glowMode? "whenGlowing"|"whenNotGlowing"|"disabled"  -- Action bar glow fallback mode: nil/"whenGlowing" = detect when glowing (default), "whenNotGlowing" = detect when NOT glowing, "disabled" = don't track glow
+---@field castSpellID? number       -- Spell to cast on click (separate from tracked aura)
+---@field castItemID? number        -- Item to use on click
+---@field castMacro? string         -- Raw macro text for click action
 
 ---Check if the player's pet is on passive stance
 ---@return boolean? true if pet exists and is on passive, nil otherwise

@@ -56,6 +56,42 @@ local function GetActionSpellID(buff)
     return GetCastableSpellID(buff.castSpellID or buff.spellID)
 end
 
+---Resolve the click action for a custom buff.
+---Priority: castMacro > castItemID > castSpellID > spellID[1] (if player knows it).
+---Kept separate from GetActionSpellID to avoid leaking category awareness into shared code.
+---@param buff table The custom buff definition
+---@return string? actionType "spell"|"item"|"macro" or nil
+---@return any actionValue The spell ID, item string, or macro text
+local function ResolveCustomClickAction(buff)
+    if not buff then
+        return nil, nil
+    end
+    -- Priority 1: Raw macro text
+    if buff.castMacro and buff.castMacro ~= "" then
+        return "macro", buff.castMacro
+    end
+    -- Priority 2: Item
+    if buff.castItemID then
+        return "item", buff.castItemID
+    end
+    -- Priority 3: Explicit cast spell (separate from tracked aura)
+    if buff.castSpellID then
+        if IsPlayerSpell(buff.castSpellID) then
+            return "spell", buff.castSpellID
+        end
+        return nil, nil
+    end
+    -- Priority 4: Fallback to tracked spell (only if player can cast it)
+    local spellID = buff.spellID
+    if type(spellID) == "table" then
+        spellID = spellID[1]
+    end
+    if spellID and IsPlayerSpell(spellID) then
+        return "spell", spellID
+    end
+    return nil, nil
+end
+
 -- ============================================================================
 -- CLICK-TO-CAST OVERLAY
 -- ============================================================================
@@ -426,6 +462,11 @@ local function SyncSecureButtons()
                 and BuffRemindersDB.categorySettings
                 and BuffRemindersDB.categorySettings[frame.buffCategory]
             local clickable = cs and cs.clickable == true
+            -- Custom buffs with per-buff click actions are individually clickable
+            if not clickable and frame.buffCategory == "custom" and frame.buffDef then
+                local def = frame.buffDef
+                clickable = def.castSpellID or def.castItemID or (def.castMacro and def.castMacro ~= "")
+            end
             if frame:IsVisible() then
                 if not clickable or not overlay._br_has_action then
                     overlay:EnableMouse(false)
@@ -654,7 +695,17 @@ local function UpdateActionButtons(category)
 
     for _, frame in pairs(BR.Display.frames) do
         if frame.buffCategory == category then
-            if enabled then
+            -- Custom buffs define click actions per-buff; treat as enabled when an action is set
+            local frameEnabled = enabled
+            local frameHighlight = showHighlight
+            if not frameEnabled and category == "custom" and frame.buffDef then
+                local def = frame.buffDef
+                if def.castSpellID or def.castItemID or (def.castMacro and def.castMacro ~= "") then
+                    frameEnabled = true
+                    frameHighlight = true
+                end
+            end
+            if frameEnabled then
                 if category == "consumable" then
                     -- Lazily create overlay on first enable
                     if not frame.clickOverlay then
@@ -717,7 +768,7 @@ local function UpdateActionButtons(category)
                                 end
                                 extra.clickOverlay:EnableMouse(true)
                                 if extra.clickOverlay.highlight then
-                                    extra.clickOverlay.highlight:SetShown(showHighlight)
+                                    extra.clickOverlay.highlight:SetShown(frameHighlight)
                                 end
                             elseif extra.clickOverlay then
                                 extra.clickOverlay:EnableMouse(false)
@@ -736,15 +787,44 @@ local function UpdateActionButtons(category)
                         end
                     end
                 else
-                    -- Spells: check castability before creating overlay
+                    -- Spells / Custom: check castability before creating overlay
                     local castableID
+                    local customActionType, customActionValue
                     if frame._br_pet_spell then
                         castableID = frame._br_pet_spell
+                    elseif category == "custom" then
+                        customActionType, customActionValue = ResolveCustomClickAction(frame.buffDef)
+                        if customActionType == "spell" then
+                            castableID = customActionValue
+                            customActionType = nil -- handled by spell path below
+                        end
                     else
                         castableID = GetActionSpellID(frame.buffDef)
                     end
 
-                    if castableID then
+                    if customActionType then
+                        -- Custom buff with item/macro action
+                        if not frame.clickOverlay then
+                            CreateClickOverlay(frame)
+                        end
+                        local overlay = frame.clickOverlay
+                        overlay._br_has_action = true
+                        overlay.itemID = nil
+                        overlay._br_clickMacroFn = nil
+                        overlay._br_clickMacroSpellID = nil
+                        if customActionType == "macro" then
+                            overlay:SetAttribute("type", "macro")
+                            overlay:SetAttribute("macrotext", customActionValue:gsub("\\n", "\n"))
+                        elseif customActionType == "item" then
+                            overlay:SetAttribute("type", "item")
+                            overlay:SetAttribute("item", "item:" .. customActionValue)
+                            overlay.itemID = customActionValue
+                        end
+                        overlay:EnableMouse(true)
+                        if overlay.highlight then
+                            overlay.highlight:SetShown(frameHighlight)
+                        end
+                    elseif castableID then
                         if not frame.clickOverlay then
                             CreateClickOverlay(frame)
                         end
@@ -765,7 +845,7 @@ local function UpdateActionButtons(category)
                         end
                         overlay:EnableMouse(true)
                         if overlay.highlight then
-                            overlay.highlight:SetShown(showHighlight)
+                            overlay.highlight:SetShown(frameHighlight)
                         end
                     elseif frame.clickOverlay then
                         frame.clickOverlay._br_has_action = false
@@ -785,7 +865,7 @@ local function UpdateActionButtons(category)
                                 extra.clickOverlay:SetAttribute("spell", extra._br_pet_spell)
                                 extra.clickOverlay:EnableMouse(true)
                                 if extra.clickOverlay.highlight then
-                                    extra.clickOverlay.highlight:SetShown(showHighlight)
+                                    extra.clickOverlay.highlight:SetShown(frameHighlight)
                                 end
                             elseif extra.clickOverlay then
                                 extra.clickOverlay:EnableMouse(false)

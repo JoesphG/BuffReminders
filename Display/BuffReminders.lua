@@ -189,6 +189,15 @@ local function ValidateSpellID(spellID)
     return name ~= nil, name, iconID
 end
 
+local function ValidateItemID(itemID)
+    local name, iconID
+    pcall(function()
+        name = C_Item.GetItemNameByID(itemID)
+        iconID = C_Item.GetItemIconByID(itemID)
+    end)
+    return name ~= nil, name, iconID
+end
+
 ---Rebuild BUFF_TABLES.custom from db.customBuffs (preserves table identity via wipe)
 local function BuildCustomBuffArray()
     local db = BuffRemindersDB
@@ -813,7 +822,8 @@ local BUFF_KEY_TO_CATEGORY = {
 
 -- Create icon frame for a buff
 local function CreateBuffFrame(buff, category)
-    local frame = CreateFrame("Frame", "BuffReminders_" .. buff.key, mainFrame)
+    local parent = (category and IsCategorySplit(category) and categoryFrames[category]) or mainFrame
+    local frame = CreateFrame("Frame", "BuffReminders_" .. buff.key, parent)
     frame.key = buff.key
     frame.spellIDs = buff.spellID
     frame.displayName = buff.name
@@ -1885,6 +1895,7 @@ UpdateDisplay = function()
                 BR.SecureButtons.UpdateActionButtons("consumable")
             end
             BR.SecureButtons.UpdateActionButtons("pet")
+            BR.SecureButtons.UpdateActionButtons("custom")
         end
     end
 end
@@ -1979,11 +1990,12 @@ local function CreateCustomBuffFrameRuntime(customBuff)
     if customBuff.glowMode ~= "disabled" then
         RegisterGlowBuff(customBuff, "custom")
     end
-    -- Force layout recalculation and schedule a deferred display refresh so the
-    -- new frame renders even if the immediate UpdateDisplay call in the save
-    -- handler fires before WoW has fully processed the new frame hierarchy.
+    -- Wire up click-to-cast for the new frame
+    if BR.SecureButtons then
+        BR.SecureButtons.UpdateActionButtons("custom")
+    end
+    -- Force layout recalculation so the caller's UpdateDisplay() repositions
     ResetLayoutSignatures()
-    C_Timer.After(0, SetDirty)
 end
 
 -- Reparent all buff frames to appropriate parent based on split status
@@ -2028,6 +2040,19 @@ local function RemoveCustomBuffFrame(key)
             end
             frame.actionButtons = nil
         end
+        -- Clean up extra frames and their overlays (prevents orphaned secure frames)
+        if frame.extraFrames and not InCombatLockdown() then
+            for _, extra in ipairs(frame.extraFrames) do
+                if extra.clickOverlay then
+                    UnregisterStateDriver(extra.clickOverlay, "visibility")
+                    extra.clickOverlay:EnableMouse(false)
+                    extra.clickOverlay:Hide()
+                    extra.clickOverlay = nil
+                end
+                extra:Hide()
+            end
+            frame.extraFrames = nil
+        end
         frame:Hide()
         frame:SetParent(nil)
         buffFrames[key] = nil
@@ -2039,9 +2064,8 @@ local function RemoveCustomBuffFrame(key)
             break
         end
     end
-    -- Force layout recalculation so the removed frame's slot is reclaimed
+    -- Force layout recalculation so the caller's UpdateDisplay() reclaims the slot
     ResetLayoutSignatures()
-    C_Timer.After(0, SetDirty)
 end
 
 -- Export custom buff management for Options.lua
@@ -2062,8 +2086,16 @@ BR.CustomBuffs = {
             -- Rebuild array (modal creates a new object for db.customBuffs[key], staling the old ref)
             BuildCustomBuffArray()
             local customBuff = BuffRemindersDB and BuffRemindersDB.customBuffs and BuffRemindersDB.customBuffs[key]
-            if customBuff and customBuff.glowMode ~= "disabled" then
-                RegisterGlowBuff(customBuff, "custom")
+            if customBuff then
+                -- Update frame's buffDef reference so click actions pick up new fields
+                frame.buffDef = customBuff
+                if customBuff.glowMode ~= "disabled" then
+                    RegisterGlowBuff(customBuff, "custom")
+                end
+            end
+            -- Refresh click-to-cast overlays with updated action fields
+            if BR.SecureButtons then
+                BR.SecureButtons.UpdateActionButtons("custom")
             end
         end
     end,
@@ -2204,6 +2236,7 @@ BR.Helpers = {
     GetCurrentContentType = BR.StateHelpers.GetCurrentContentType,
     IsCategoryVisibleForContent = BR.StateHelpers.IsCategoryVisibleForContent,
     ValidateSpellID = ValidateSpellID,
+    ValidateItemID = ValidateItemID,
     GenerateCustomBuffKey = GenerateCustomBuffKey,
 }
 
@@ -2870,7 +2903,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
             -- Initialize action buttons for categories with clickable enabled
             for _, cat in ipairs(CATEGORIES) do
                 local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings[cat]
-                if cs and cs.clickable then
+                if (cs and cs.clickable) or cat == "custom" then
                     BR.SecureButtons.UpdateActionButtons(cat)
                 end
             end

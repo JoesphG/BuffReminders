@@ -44,6 +44,7 @@ local GetCategorySettings = BR.Helpers.GetCategorySettings
 local IsCategorySplit = BR.Helpers.IsCategorySplit
 local GetBuffTexture = BR.Helpers.GetBuffTexture
 local ValidateSpellID = BR.Helpers.ValidateSpellID
+local ValidateItemID = BR.Helpers.ValidateItemID
 local GenerateCustomBuffKey = BR.Helpers.GenerateCustomBuffKey
 
 -- Display function aliases
@@ -2408,7 +2409,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     end
 
     local MODAL_WIDTH = 460
-    local BASE_HEIGHT = 400
+    local BASE_HEIGHT = 530
     local ROW_HEIGHT = 26
     local CONTENT_LEFT = 20
     local ROWS_START_Y = -60
@@ -2433,6 +2434,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     })
 
     local spellRows, nameBox, missingBox
+    local castSpellEditBox, castItemEditBox, macroEditBox
 
     modal:SetScript("OnHide", function()
         if spellRows then
@@ -2447,6 +2449,15 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         end
         if missingBox then
             missingBox:ClearFocus()
+        end
+        if castSpellEditBox then
+            castSpellEditBox:ClearFocus()
+        end
+        if castItemEditBox then
+            castItemEditBox:ClearFocus()
+        end
+        if macroEditBox then
+            macroEditBox:ClearFocus()
         end
     end)
 
@@ -2471,6 +2482,8 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     local glowModeDropdown, requireSpellKnownToggle
     local classDropdownHolder
     local specDropdownHolder
+    local actionTypeDropdown
+    local actionInputHolder
 
     local function UpdateLayout()
         local rowCount = #spellRows
@@ -2592,7 +2605,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
 
     -- Sections frame (always visible, below add-spell button)
     sectionsFrame = CreateFrame("Frame", nil, modal)
-    sectionsFrame:SetSize(MODAL_WIDTH - 40, 280)
+    sectionsFrame:SetSize(MODAL_WIDTH - 40, 350)
 
     local function CreateSeparator(parent, yOff, width)
         local line = parent:CreateTexture(nil, "ARTWORK")
@@ -2743,6 +2756,199 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     })
     glowModeDropdown:SetPoint("TOPLEFT", 0, -210)
 
+    -- Click action section
+    CreateSeparator(sectionsFrame, -248)
+    CreateSectionHeader(sectionsFrame, "CLICK ACTION", 0, -257)
+
+    -- Determine existing action type
+    local existingActionType = "none"
+    if editingBuff then
+        if editingBuff.castMacro and editingBuff.castMacro ~= "" then
+            existingActionType = "macro"
+        elseif editingBuff.castItemID then
+            existingActionType = "item"
+        elseif editingBuff.castSpellID then
+            existingActionType = "spell"
+        end
+    end
+
+    -- Container for the conditional input (spell/item Lookup or macro text)
+    actionInputHolder = CreateFrame("Frame", nil, sectionsFrame)
+    actionInputHolder:SetSize(MODAL_WIDTH - 40, 26)
+    actionInputHolder:SetPoint("TOPLEFT", 0, -302)
+
+    -- Spell ID input with Lookup
+    castSpellEditBox = CreateFrame("EditBox", nil, actionInputHolder)
+    castSpellEditBox:SetFontObject("GameFontHighlightSmall")
+    castSpellEditBox:SetAutoFocus(false)
+    local castSpellContainer = StyleEditBox(castSpellEditBox)
+    castSpellContainer:SetSize(70, 20)
+    castSpellContainer:SetPoint("LEFT", 0, 0)
+    if editingBuff and editingBuff.castSpellID then
+        castSpellEditBox:SetText(tostring(editingBuff.castSpellID))
+    end
+
+    local castSpellIcon = CreateBuffIcon(actionInputHolder, 18)
+    castSpellIcon:SetPoint("LEFT", castSpellContainer, "RIGHT", 68, 0)
+    castSpellIcon:Hide()
+
+    local castSpellName = actionInputHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    castSpellName:SetPoint("LEFT", castSpellIcon, "RIGHT", 5, 0)
+    castSpellName:SetPoint("RIGHT", actionInputHolder, "RIGHT", 0, 0)
+    castSpellName:SetJustifyH("LEFT")
+    castSpellName:SetWordWrap(false)
+
+    local castSpellLookupBtn = CreateButton(actionInputHolder, "Lookup", function()
+        local id = tonumber(castSpellEditBox:GetText())
+        if not id then
+            castSpellIcon:Hide()
+            castSpellName:SetText("|cffff4d4dInvalid ID|r")
+            return
+        end
+        local valid, name, iconID = ValidateSpellID(id)
+        if valid then
+            castSpellIcon:SetTexture(iconID)
+            castSpellIcon:Show()
+            castSpellName:SetText(name or "")
+        else
+            castSpellIcon:Hide()
+            castSpellName:SetText("|cffff4d4dNot found|r")
+        end
+    end)
+    castSpellLookupBtn:SetSize(55, 20)
+    castSpellLookupBtn:SetPoint("LEFT", castSpellContainer, "RIGHT", 5, 0)
+
+    -- Item ID input with Lookup
+    castItemEditBox = CreateFrame("EditBox", nil, actionInputHolder)
+    castItemEditBox:SetFontObject("GameFontHighlightSmall")
+    castItemEditBox:SetAutoFocus(false)
+    local castItemContainer = StyleEditBox(castItemEditBox)
+    castItemContainer:SetSize(70, 20)
+    castItemContainer:SetPoint("LEFT", 0, 0)
+    if editingBuff and editingBuff.castItemID then
+        castItemEditBox:SetText(tostring(editingBuff.castItemID))
+    end
+
+    local castItemIcon = CreateBuffIcon(actionInputHolder, 18)
+    castItemIcon:SetPoint("LEFT", castItemContainer, "RIGHT", 68, 0)
+    castItemIcon:Hide()
+
+    local castItemName = actionInputHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    castItemName:SetPoint("LEFT", castItemIcon, "RIGHT", 5, 0)
+    castItemName:SetPoint("RIGHT", actionInputHolder, "RIGHT", 0, 0)
+    castItemName:SetJustifyH("LEFT")
+    castItemName:SetWordWrap(false)
+
+    local castItemLookupBtn = CreateButton(actionInputHolder, "Lookup", function()
+        local id = tonumber(castItemEditBox:GetText())
+        if not id then
+            castItemIcon:Hide()
+            castItemName:SetText("|cffff4d4dInvalid ID|r")
+            return
+        end
+        local valid, name, iconID = ValidateItemID(id)
+        if valid then
+            castItemIcon:SetTexture(iconID)
+            castItemIcon:Show()
+            castItemName:SetText(name or "")
+        else
+            castItemIcon:Hide()
+            castItemName:SetText("|cffff4d4dNot found (try again)|r")
+            -- Request item data load for next lookup attempt
+            pcall(C_Item.RequestLoadItemDataByID, id)
+        end
+    end)
+    castItemLookupBtn:SetSize(55, 20)
+    castItemLookupBtn:SetPoint("LEFT", castItemContainer, "RIGHT", 5, 0)
+
+    -- Macro text input
+    local macroHolder = Components.TextInput(actionInputHolder, {
+        label = "",
+        value = editingBuff and editingBuff.castMacro or "",
+        width = MODAL_WIDTH - 80,
+        labelWidth = 0,
+    })
+    macroHolder:SetPoint("LEFT", 0, 0)
+    macroEditBox = macroHolder.editBox
+
+    local macroHint = actionInputHolder:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    macroHint:SetPoint("TOPLEFT", 0, -24)
+    macroHint:SetText("e.g. /use item:12345\\n/use 13")
+
+    -- Show/hide inputs based on action type
+    local function UpdateActionInputVisibility(actionType)
+        -- Hide all first
+        castSpellContainer:Hide()
+        castSpellLookupBtn:Hide()
+        castSpellIcon:Hide()
+        castSpellName:SetText("")
+        castItemContainer:Hide()
+        castItemLookupBtn:Hide()
+        castItemIcon:Hide()
+        castItemName:SetText("")
+        macroHolder:Hide()
+        macroHint:Hide()
+
+        if actionType == "spell" then
+            castSpellContainer:Show()
+            castSpellLookupBtn:Show()
+            -- Trigger lookup if there's a value
+            if castSpellEditBox:GetText() ~= "" then
+                local id = tonumber(castSpellEditBox:GetText())
+                if id then
+                    local valid, name, iconID = ValidateSpellID(id)
+                    if valid then
+                        castSpellIcon:SetTexture(iconID)
+                        castSpellIcon:Show()
+                        castSpellName:SetText(name or "")
+                    end
+                end
+            end
+        elseif actionType == "item" then
+            castItemContainer:Show()
+            castItemLookupBtn:Show()
+            -- Trigger lookup if there's a value
+            if castItemEditBox:GetText() ~= "" then
+                local id = tonumber(castItemEditBox:GetText())
+                if id then
+                    local valid, name, iconID = ValidateItemID(id)
+                    if valid then
+                        castItemIcon:SetTexture(iconID)
+                        castItemIcon:Show()
+                        castItemName:SetText(name or "")
+                    end
+                end
+            end
+        elseif actionType == "macro" then
+            macroHolder:Show()
+            macroHint:Show()
+        end
+    end
+
+    local actionTypeOptions = {
+        { value = "none", label = "None" },
+        { value = "spell", label = "Spell" },
+        { value = "item", label = "Item" },
+        { value = "macro", label = "Macro" },
+    }
+    actionTypeDropdown = Components.Dropdown(sectionsFrame, {
+        label = "On click:",
+        options = actionTypeOptions,
+        selected = existingActionType,
+        width = 120,
+        tooltip = {
+            title = "Click action",
+            desc = "What happens when you click this buff icon. Spell casts a spell, Item uses an item, Macro runs a macro command.",
+        },
+        onChange = function(value)
+            UpdateActionInputVisibility(value)
+        end,
+    })
+    actionTypeDropdown:SetPoint("TOPLEFT", 0, -278)
+
+    -- Initialize visibility for the current action type
+    UpdateActionInputVisibility(existingActionType)
+
     local saveError = modal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     saveError:SetPoint("BOTTOMLEFT", 20, 42)
     saveError:SetWidth(MODAL_WIDTH - 120)
@@ -2799,6 +3005,22 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             missingTextValue = nil
         end
 
+        -- Resolve click action fields based on selected action type
+        local selectedAction = actionTypeDropdown:GetValue()
+        local castSpellIDValue = nil
+        local castItemIDValue = nil
+        local castMacroValue = nil
+        if selectedAction == "spell" then
+            castSpellIDValue = tonumber(strtrim(castSpellEditBox:GetText())) or nil
+        elseif selectedAction == "item" then
+            castItemIDValue = tonumber(strtrim(castItemEditBox:GetText())) or nil
+        elseif selectedAction == "macro" then
+            local macroText = strtrim(macroEditBox:GetText())
+            if macroText ~= "" then
+                castMacroValue = macroText
+            end
+        end
+
         local customBuff = {
             spellID = spellIDValue,
             key = key,
@@ -2809,6 +3031,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             showWhenPresent = showIconToggle:GetChecked() or nil,
             requireSpellKnown = requireSpellKnownToggle:GetChecked() or nil,
             glowMode = glowModeDropdown:GetValue() ~= "whenGlowing" and glowModeDropdown:GetValue() or nil,
+            castSpellID = castSpellIDValue,
+            castItemID = castItemIDValue,
+            castMacro = castMacroValue,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff
