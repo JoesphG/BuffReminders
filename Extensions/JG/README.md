@@ -11,15 +11,12 @@ This document tracks the JG-specific code that remains after upstream resync.
 
 1. `Extensions/JG/Bootstrap.lua`
 - Injects additive self-buff anchors into `BR.BUFF_TABLES.self`:
-  - `jg_soulwell`
   - `jg_repair`
   - `jg_eating_timer`
 
 2. `Extensions/JG/PostRefresh.lua`
 - Wraps `BR.BuffState.Refresh` and applies parity post-processing in one pass:
-  - healthstone
   - soulstone
-  - soulwell
   - repair
   - eating timer
 - Rebuilds `BR.BuffState.visibleByCategory` after post-refresh mutations.
@@ -28,7 +25,6 @@ This document tracks the JG-specific code that remains after upstream resync.
 
 3. `Extensions/JG/OptionsSection.lua`
 - Adds JG settings section in `/br` Settings tab:
-  - healthstone threshold
   - soulstone threshold
   - repair threshold
   - eating timer toggles
@@ -47,7 +43,7 @@ This document tracks the JG-specific code that remains after upstream resync.
   - `Extensions\\JG\\PostRefresh.lua`
   - `Extensions\\JG\\PetHover.lua`
   - `Extensions\\JG\\OptionsSection.lua`
-- Fork version suffix: `3.8.0-JG.5`.
+- Fork version suffix: `3.8.0-JG.6`.
 
 6. `Options/Options.lua`
 - Integrates extension settings by calling `BR.JG.BuildSettingsSection(...)`.
@@ -78,7 +74,6 @@ Why: `Bootstrap` requires buff tables; `PostRefresh` wraps `State.Refresh`; hove
 
 `BuffRemindersDB.jgParity` keys:
 
-- `healthstoneThreshold` (default `1`)
 - `soulstoneThresholdMin` (default `5`)
 - `durabilityThreshold` (default `30`)
 - `enableEatingTimer` (default `true`)
@@ -96,6 +91,5 @@ Why: `Bootstrap` requires buff tables; `PostRefresh` wraps `State.Refresh`; hove
 - Warlock and non-warlock characters.
 - Solo, party, and raid contexts.
 - Instance vs open-world gating behavior.
-- Soulwell/healthstone de-duplication behavior.
 - Pet hover tooltip/icon behavior in generic and expanded pet modes.
 - Eating timer visibility and food suppression toggle behavior.

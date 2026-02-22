@@ -11,9 +11,6 @@ local function EnsureParityDB()
     BuffRemindersDB.jgParity = BuffRemindersDB.jgParity or {}
     local db = BuffRemindersDB.jgParity
 
-    if db.healthstoneThreshold == nil then
-        db.healthstoneThreshold = 1
-    end
     if db.soulstoneThresholdMin == nil then
         db.soulstoneThresholdMin = 5
     end
@@ -43,28 +40,6 @@ BR.JG.BuildSettingsSection = function(settingsContent, setLayout, opts)
     EnsureParityDB()
 
     LayoutSectionHeader(setLayout, settingsContent, "JG")
-
-    local hsHolder = Components.Slider(settingsContent, {
-        label = "Healthstone",
-        min = 0,
-        max = 5,
-        step = 1,
-        suffix = " charges",
-        get = function()
-            local db = EnsureParityDB()
-            return tonumber(db.healthstoneThreshold) or 1
-        end,
-        tooltip = {
-            title = "Healthstone warning threshold",
-            desc = "Show warning when your charges are at or below this value.",
-        },
-        onChange = function(val)
-            local db = EnsureParityDB()
-            db.healthstoneThreshold = val
-            UpdateDisplay()
-        end,
-    })
-    setLayout:Add(hsHolder, nil, COMPONENT_GAP)
 
     local ssHolder = Components.Slider(settingsContent, {
         label = "Soulstone",

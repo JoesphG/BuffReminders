@@ -885,6 +885,18 @@ local function CreateOptionsPanel()
         return BuffRemindersDB.defaults and BuffRemindersDB.defaults.showExpirationGlow ~= false
     end
 
+    -- Keep glow effect (type/color/size) consistent across all categories.
+    local function SetGlobalGlowEffectForAllCategories(changes)
+        local batch = {}
+        for key, value in pairs(changes) do
+            batch["defaults." .. key] = value
+            for _, category in ipairs(CATEGORY_ORDER) do
+                batch["categorySettings." .. category .. "." .. key] = value
+            end
+        end
+        BR.Config.SetMulti(batch)
+    end
+
     local defThresholdHolder = Components.Slider(displayBehaviorContent, {
         min = 1,
         max = 45,
@@ -915,7 +927,7 @@ local function CreateOptionsPanel()
         enabled = isExpirationGlowEnabled,
         width = 130,
         onChange = function(val)
-            BR.Config.Set("defaults.glowType", val)
+            SetGlobalGlowEffectForAllCategories({ glowType = val })
         end,
     }, "BuffRemindersDefGlowTypeDropdown")
     defTypeHolder:SetPoint("LEFT", defThresholdHolder, "RIGHT", 8, 0)
@@ -928,7 +940,7 @@ local function CreateOptionsPanel()
         end,
         enabled = isExpirationGlowEnabled,
         onChange = function(checked)
-            BR.Config.Set("defaults.useCustomGlowColor", checked)
+            SetGlobalGlowEffectForAllCategories({ useCustomGlowColor = checked })
             Components.RefreshAll()
         end,
     })
@@ -944,7 +956,7 @@ local function CreateOptionsPanel()
                 and (BuffRemindersDB.defaults and BuffRemindersDB.defaults.useCustomGlowColor or false)
         end,
         onChange = function(r, g, b, a)
-            BR.Config.Set("defaults.glowColor", { r, g, b, a or 1 })
+            SetGlobalGlowEffectForAllCategories({ glowColor = { r, g, b, a or 1 } })
         end,
     })
 
@@ -959,7 +971,7 @@ local function CreateOptionsPanel()
         end,
         enabled = isExpirationGlowEnabled,
         onChange = function(val)
-            BR.Config.Set("defaults.glowSize", val)
+            SetGlobalGlowEffectForAllCategories({ glowSize = val })
         end,
     })
     displayBehaviorLayout:Add(defGlowHolder, nil, COMPONENT_GAP + DROPDOWN_EXTRA)

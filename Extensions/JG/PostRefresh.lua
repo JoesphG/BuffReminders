@@ -32,9 +32,6 @@ local function EnsureParityDB()
     BuffRemindersDB.jgParity = BuffRemindersDB.jgParity or {}
     local db = BuffRemindersDB.jgParity
 
-    if db.healthstoneThreshold == nil then
-        db.healthstoneThreshold = 1
-    end
     if db.soulstoneThresholdMin == nil then
         db.soulstoneThresholdMin = 5
     end
@@ -95,38 +92,6 @@ end
 local function IsWarlockPlayer()
     local _, class = UnitClass("player")
     return class == "WARLOCK"
-end
-
-local function CountItem(itemID)
-    local ok, count = pcall(C_Item.GetItemCount, itemID, false, true)
-    if ok and type(count) == "number" then
-        return count
-    end
-    return C_Item.GetItemCount(itemID, false) or 0
-end
-
-local function HasWarlockInGroup()
-    if IsWarlockPlayer() then
-        return true
-    end
-    if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do
-            local _, class = UnitClass("raid" .. i)
-            if class == "WARLOCK" then
-                return true
-            end
-        end
-        return false
-    end
-    if IsInGroup() then
-        for i = 1, GetNumSubgroupMembers() do
-            local _, class = UnitClass("party" .. i)
-            if class == "WARLOCK" then
-                return true
-            end
-        end
-    end
-    return false
 end
 
 local function FormatSeconds(seconds)
@@ -198,65 +163,6 @@ local function RebuildVisibleByCategory()
     end
 end
 
-local function ProcessHealthstone(db)
-    local entry = BR.BuffState.GetEntry("healthstone")
-    if not entry then
-        return
-    end
-    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("healthstone") then
-        HideEntry(entry)
-        return
-    end
-
-    local inGroup = GetNumGroupMembers() > 0
-    local inInstance = select(1, IsInInstance())
-    local resting = IsResting()
-    local dead = UnitIsDeadOrGhost("player")
-    if dead or resting or not inGroup or not inInstance then
-        HideEntry(entry)
-        return
-    end
-
-    local threshold = tonumber(db.healthstoneThreshold) or 1
-    local isWarlock = IsWarlockPlayer()
-
-    local charges = 0
-    if isWarlock and IsPlayerSpell(386689) then
-        charges = CountItem(224464) -- Demonic Healthstone
-    else
-        charges = CountItem(5512) -- Healthstone
-    end
-
-    if not isWarlock and not HasWarlockInGroup() then
-        HideEntry(entry)
-        return
-    end
-
-    -- Avoid duplicate warlock reminders: if Soulwell is available right now,
-    -- let Soulwell own the action prompt and suppress Healthstone count.
-    if isWarlock and IsPlayerSpell(29893) then
-        local cd = C_Spell.GetSpellCooldown(29893)
-        local start = SafeNumber(cd and cd.startTime, 0) or 0
-        local dur = SafeNumber(cd and cd.duration, 0) or 0
-        local enabled = cd and cd.isEnabled
-        if IsSecretValue(enabled) then
-            enabled = false
-        end
-        local onCD = enabled and start and dur and start > 0 and dur > 1.5 and ((start + dur) > GetTime())
-        if not onCD and charges <= threshold then
-            HideEntry(entry)
-            return
-        end
-    end
-
-    if charges <= threshold then
-        SetCount(entry, tostring(charges), charges == 0)
-        return
-    end
-
-    HideEntry(entry)
-end
-
 local function ProcessSoulstone(db)
     local entry = BR.BuffState.GetEntry("soulstone")
     if not entry then
@@ -326,54 +232,6 @@ local function ProcessSoulstone(db)
     HideEntry(entry)
 end
 
-local function ProcessSoulwell(db)
-    local entry = BR.BuffState.GetEntry("jg_soulwell")
-    if not entry then
-        return
-    end
-    if BR.StateHelpers.IsBuffEnabled and not BR.StateHelpers.IsBuffEnabled("jg_soulwell") then
-        HideEntry(entry)
-        return
-    end
-    if not IsWarlockPlayer() then
-        HideEntry(entry)
-        return
-    end
-    if UnitIsDeadOrGhost("player") or IsResting() or InCombatLockdown() then
-        HideEntry(entry)
-        return
-    end
-    if not (GetNumGroupMembers() > 0 and select(1, IsInInstance())) then
-        HideEntry(entry)
-        return
-    end
-    if not IsPlayerSpell(29893) then
-        HideEntry(entry)
-        return
-    end
-
-    local cd = C_Spell.GetSpellCooldown(29893)
-    local start = SafeNumber(cd and cd.startTime, 0) or 0
-    local dur = SafeNumber(cd and cd.duration, 0) or 0
-    local enabled = cd and cd.isEnabled
-    if IsSecretValue(enabled) then
-        enabled = false
-    end
-    local onCD = enabled and start and dur and start > 0 and dur > 1.5 and ((start + dur) > GetTime())
-    if onCD then
-        HideEntry(entry)
-        return
-    end
-
-    local hsCount = CountItem(IsPlayerSpell(386689) and 224464 or 5512)
-    if hsCount > (tonumber(db.healthstoneThreshold) or 1) then
-        HideEntry(entry)
-        return
-    end
-
-    SetMissing(entry, "SOUL\nWELL", true)
-end
-
 local function ProcessRepair(db)
     local entry = BR.BuffState.GetEntry("jg_repair")
     if not entry then
@@ -432,9 +290,7 @@ local function PostRefreshPatch()
     end
     local db = EnsureParityDB()
 
-    ProcessHealthstone(db)
     ProcessSoulstone(db)
-    ProcessSoulwell(db)
     ProcessRepair(db)
     ProcessEatingTimer(db)
 

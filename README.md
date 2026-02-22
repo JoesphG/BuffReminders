@@ -29,7 +29,6 @@
 This fork includes additive `Extensions/JG` parity modules plus targeted display/options customizations while keeping upstream sync low-friction.
 
 - Soulstone parity behavior with expiration threshold logic
-- Healthstone parity behavior with charge threshold logic and Soulwell reminder handling
 - Repair/durability reminder with configurable threshold
 - Eating timer row with optional suppression of default food reminder while eating
 - Dedicated JG parity settings section in `/br` options

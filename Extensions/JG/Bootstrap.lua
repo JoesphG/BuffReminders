@@ -15,17 +15,6 @@ local function EnsureInjectedSelfBuff(def)
     selfBuffs[#selfBuffs + 1] = def
 end
 
--- Soulwell reminder anchor (visibility logic handled in PostRefresh).
-EnsureInjectedSelfBuff({
-    spellID = 29893, -- Ritual of Souls
-    key = "jg_soulwell",
-    name = "Soulwell",
-    class = "WARLOCK",
-    displayIcon = 136194,
-    missingText = "SOUL\nWELL",
-    infoTooltip = "JG|Shows when Soulwell is available and your healthstones are low.",
-})
-
 -- Durability/repair reminder anchor (state handled in PostRefresh).
 EnsureInjectedSelfBuff({
     spellID = 0,
