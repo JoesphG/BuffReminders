@@ -1585,10 +1585,18 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
         items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
         frame._cachedItems = items
     end
+    -- Hide leftover extra frames (re-shown below if still in "expanded" mode)
+    if frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
+    end
+
     if displayMode == "sub_icons" then
         local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.consumable
         local clickable = cs and cs.clickable == true
-        BR.SecureButtons.UpdateConsumableButtons(frame, items, clickable)
+        -- Skip first item (already shown as main icon)
+        BR.SecureButtons.UpdateConsumableButtons(frame, items, clickable, 2)
     else
         -- Not sub_icons: hide any leftover sub-icon buttons
         BR.SecureButtons.UpdateConsumableButtons(frame, nil)

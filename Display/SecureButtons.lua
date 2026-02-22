@@ -346,8 +346,10 @@ end
 ---@param frame table The buff frame
 ---@param actionItems table[]? Array of { itemID, count, icon }
 ---@param clickable boolean? Whether buttons should accept mouse input
-local function UpdateConsumableButtons(frame, actionItems, clickable)
-    if not actionItems or #actionItems <= 1 then
+---@param startIndex? number First index in actionItems to show (default 1)
+local function UpdateConsumableButtons(frame, actionItems, clickable, startIndex)
+    startIndex = startIndex or 1
+    if not actionItems or #actionItems < startIndex + 1 then
         if frame.actionButtons then
             for _, btn in ipairs(frame.actionButtons) do
                 btn._br_visible = false
@@ -361,12 +363,15 @@ local function UpdateConsumableButtons(frame, actionItems, clickable)
         frame.actionButtons = {}
     end
 
-    for i, item in ipairs(actionItems) do
-        local btn = frame.actionButtons[i]
+    local btnIndex = 0
+    for i = startIndex, #actionItems do
+        btnIndex = btnIndex + 1
+        local item = actionItems[i]
+        local btn = frame.actionButtons[btnIndex]
         if not btn then
             btn = CreateActionButton()
             btn._br_buff_frame = frame
-            frame.actionButtons[i] = btn
+            frame.actionButtons[btnIndex] = btn
         end
 
         btn.itemID = item.itemID
@@ -393,7 +398,7 @@ local function UpdateConsumableButtons(frame, actionItems, clickable)
     end
 
     -- Mark unused buttons hidden
-    for i = #actionItems + 1, #frame.actionButtons do
+    for i = btnIndex + 1, #frame.actionButtons do
         frame.actionButtons[i]._br_visible = false
         frame.actionButtons[i]:Hide()
     end
