@@ -181,7 +181,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSTONE",
             readyCheckOnly = true,
             castOnOthers = true,
-            infoTooltip = "Ready Check Only|This buff is only shown during ready checks.",
+            infoTooltip = "Ready Check Only|This buff is only shown during ready checks.\nClick-to-cast is not available for this buff.",
             noGlow = true,
         },
     },
