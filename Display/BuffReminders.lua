@@ -660,8 +660,18 @@ end
 
 for catName, category in pairs(BUFF_TABLES) do
     for _, buff in ipairs(category) do
-        -- Skip if: has enchantID, customCheck, readyCheckOnly, or glowMode disabled (custom buffs only)
-        if not buff.enchantID and not buff.customCheck and not buff.readyCheckOnly and buff.glowMode ~= "disabled" then
+        -- Skip if: has enchantID, customCheck, or glowMode disabled (custom buffs only)
+        -- readyCheckOnly buffs are skipped unless the user overrode them to always-show
+        local skipReadyCheck = buff.readyCheckOnly
+        if skipReadyCheck then
+            local db = BuffRemindersDB
+            local overrides = db and db.readyCheckOnlyOverrides
+            local overrideKey = buff.groupId or buff.key
+            if overrides and overrides[overrideKey] == false then
+                skipReadyCheck = false
+            end
+        end
+        if not buff.enchantID and not buff.customCheck and not skipReadyCheck and buff.glowMode ~= "disabled" then
             RegisterGlowBuff(buff, catName)
         end
     end

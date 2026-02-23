@@ -418,21 +418,73 @@ local function CreateOptionsPanel()
     end
 
     -- Create buff checkbox using Components.Checkbox
-    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, displayName, infoTooltip, displayIcon)
+    local function CreateBuffCheckbox(
+        parent,
+        x,
+        y,
+        spellIDs,
+        key,
+        displayName,
+        infoTooltip,
+        displayIcon,
+        readyCheckOnly
+    )
         local holder = Components.Checkbox(parent, {
             label = displayName,
             icons = ResolveBuffIcons(displayIcon, spellIDs),
-            infoTooltip = infoTooltip,
+            infoTooltip = not readyCheckOnly and infoTooltip or nil,
             get = function()
                 return BuffRemindersDB.enabledBuffs[key] ~= false
             end,
             onChange = function(checked)
                 BuffRemindersDB.enabledBuffs[key] = checked
                 UpdateDisplay()
+                if readyCheckOnly then
+                    Components.RefreshAll()
+                end
             end,
         })
         holder:SetPoint("TOPLEFT", x, y)
         panel.buffCheckboxes[key] = holder
+
+        -- Inline toggle: "Ready check only" / "Always show" (replaces info tooltip icon)
+        if readyCheckOnly then
+            local function GetReadyCheckOnlyState()
+                local overrides = BuffRemindersDB.readyCheckOnlyOverrides
+                return not overrides or overrides[key] ~= false
+            end
+
+            local function ToggleLabel(checked)
+                return checked and "Ready check" or "Always"
+            end
+
+            local toggle
+            toggle = Components.Toggle(holder, {
+                label = ToggleLabel(GetReadyCheckOnlyState()),
+                get = GetReadyCheckOnlyState,
+                enabled = function()
+                    return BuffRemindersDB.enabledBuffs[key] ~= false
+                end,
+                onChange = function(checked)
+                    if checked then
+                        -- Ready check only (default): remove override
+                        BR.Config.Set("readyCheckOnlyOverrides." .. key, nil)
+                    else
+                        -- Always show: store explicit false
+                        BR.Config.Set("readyCheckOnlyOverrides." .. key, false)
+                    end
+                    toggle.label:SetText(ToggleLabel(checked))
+                end,
+            })
+            -- Also update label text on Refresh (wrap original Refresh)
+            local origRefresh = toggle.Refresh
+            function toggle:Refresh()
+                origRefresh(self)
+                self.label:SetText(ToggleLabel(GetReadyCheckOnlyState()))
+            end
+            toggle:SetPoint("LEFT", holder.label, "RIGHT", 6, 0)
+        end
+
         return y - ITEM_HEIGHT
     end
 
@@ -444,6 +496,7 @@ local function CreateOptionsPanel()
         local groupSpells = {}
         local groupDisplaySpells = {}
         local groupIconOverrides = {}
+        local groupReadyCheckOnly = {}
 
         for _, buff in ipairs(buffArray) do
             if buff.groupId then
@@ -497,6 +550,9 @@ local function CreateOptionsPanel()
                         end
                     end
                 end
+                if buff.readyCheckOnly then
+                    groupReadyCheckOnly[buff.groupId] = true
+                end
             end
         end
 
@@ -523,7 +579,8 @@ local function CreateOptionsPanel()
                         buff.groupId,
                         groupInfo.displayName,
                         buff.infoTooltip,
-                        displayIcon
+                        displayIcon,
+                        groupReadyCheckOnly[buff.groupId]
                     )
                 end
             else
@@ -536,7 +593,8 @@ local function CreateOptionsPanel()
                     buff.key,
                     buff.name,
                     buff.infoTooltip,
-                    buff.displayIcon
+                    buff.displayIcon,
+                    buff.readyCheckOnly
                 )
             end
         end

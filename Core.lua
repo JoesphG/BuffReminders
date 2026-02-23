@@ -190,6 +190,7 @@ local DynamicRoots = {
     enabledBuffs = "DisplayRefresh",
     categoryVisibility = "DisplayRefresh",
     splitCategories = "FramesReparent",
+    readyCheckOnlyOverrides = "DisplayRefresh",
 }
 
 ---Check if a config path is valid

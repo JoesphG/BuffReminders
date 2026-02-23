@@ -182,7 +182,6 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSTONE",
             readyCheckOnly = true,
             castOnOthers = true,
-            infoTooltip = "Ready Check Only|This buff is only shown during ready checks.\nClick-to-cast is not available for this buff.",
             noExpirationGlow = true,
         },
     },
@@ -674,7 +673,6 @@ BR.BUFF_TABLES = {
             groupId = "healthstone",
             displayIcon = 538745, -- Healthstone icon
             readyCheckOnly = true,
-            infoTooltip = "Ready Check Only|This is only shown during ready checks.",
         },
     },
 }

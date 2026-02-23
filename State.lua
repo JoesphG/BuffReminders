@@ -819,9 +819,13 @@ local function PassesPreChecks(buff, presentClasses, db)
         return false
     end
 
-    -- Ready check only
+    -- Ready check only (can be overridden per-buff via readyCheckOnlyOverrides)
     if buff.readyCheckOnly and not inReadyCheck then
-        return false
+        local overrides = db.readyCheckOnlyOverrides
+        local settingKey = buff.groupId or buff.key
+        if not overrides or overrides[settingKey] ~= false then
+            return false
+        end
     end
 
     -- Class filtering
@@ -997,7 +1001,13 @@ function BuffState.Refresh()
             HasCasterForBuff(buff.class, buff.levelRequired),
             buff.castOnOthers
         )
-        local showBuff = presenceVisible and (not buff.readyCheckOnly or inReadyCheck) and scope.show
+        local readyCheckOk = not buff.readyCheckOnly or inReadyCheck
+        if not readyCheckOk then
+            local overrides = db.readyCheckOnlyOverrides
+            local overrideKey = buff.groupId or buff.key
+            readyCheckOk = overrides and overrides[overrideKey] == false
+        end
+        local showBuff = presenceVisible and readyCheckOk and scope.show
         if IsBuffEnabled(buff.key) and showBuff then
             local hasBuff, minRemaining = HasPresenceBuff(buff.spellID, scope.playerOnly)
 
