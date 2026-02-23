@@ -29,7 +29,7 @@ local _, BR = ...
 ---@field excludeSpellID? number
 ---@field displayIcon? number
 ---@field infoTooltip? string
----@field noGlow? boolean
+---@field noExpirationGlow? boolean
 ---@field readyCheckOnly? boolean Only show during ready checks
 ---@field castOnOthers? boolean Buff exists on the target, not the caster (e.g., Soulstone)
 
@@ -183,7 +183,7 @@ BR.BUFF_TABLES = {
             readyCheckOnly = true,
             castOnOthers = true,
             infoTooltip = "Ready Check Only|This buff is only shown during ready checks.\nClick-to-cast is not available for this buff.",
-            noGlow = true,
+            noExpirationGlow = true,
         },
     },
     ---@type TargetedBuff[]

@@ -998,14 +998,12 @@ function BuffState.Refresh()
             buff.castOnOthers
         )
         local showBuff = presenceVisible and (not buff.readyCheckOnly or inReadyCheck) and scope.show
-        local noGlow = buff.noGlow
-
         if IsBuffEnabled(buff.key) and showBuff then
             local hasBuff, minRemaining = HasPresenceBuff(buff.spellID, scope.playerOnly)
 
             if not hasBuff then
-                SetEntryMissing(entry, buff.missingText, presGlowMissing and not noGlow)
-            elseif presGlow and not noGlow then
+                SetEntryMissing(entry, buff.missingText, presGlowMissing)
+            elseif presGlow and not buff.noExpirationGlow then
                 TrySetEntryExpiring(entry, minRemaining, presGlowThreshold)
             end
         end

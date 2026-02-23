@@ -1208,8 +1208,6 @@ local function GenerateTestEntries()
                 entry.sortOrder = i
                 entry.visible = true
 
-                local noGlow = buff.noGlow
-
                 if category == "raid" then
                     if glowEnabled and not expiringShown then
                         entry.displayType = "expiring"
@@ -1239,10 +1237,10 @@ local function GenerateTestEntries()
                     entry.displayType = "missing"
                     entry.missingText = buff.missingText
                     entry.iconByRole = buff.iconByRole
-                    entry.shouldGlow = glowWhenMissing and not noGlow
+                    entry.shouldGlow = glowWhenMissing
 
                     -- Show first buff as expiring to preview expiration glow
-                    if glowEnabled and not noGlow and not expiringShown then
+                    if glowEnabled and not buff.noExpirationGlow and not expiringShown then
                         entry.displayType = "expiring"
                         entry.countText = FormatRemainingTime(testModeData.fakeRemaining)
                         entry.shouldGlow = true
