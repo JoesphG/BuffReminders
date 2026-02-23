@@ -132,6 +132,12 @@ local function BuildWarlockActions()
     return actions
 end
 
+-- Single-action pet spell ID → short pet name (fallback: full spell name)
+local SINGLE_PET_NAMES = {
+    [46584] = "Ghoul", -- Raise Dead (DK)
+    [31687] = "Water Elemental", -- Summon Water Elemental (Mage)
+}
+
 ---Build a single-action list for a given spell
 ---@param spellID number
 ---@return PetAction[]?
@@ -149,7 +155,7 @@ local function BuildSingleAction(spellID)
             spellID = spellID,
             spellName = info.name,
             icon = info.iconID,
-            label = info.name,
+            label = SINGLE_PET_NAMES[spellID] or info.name,
             sortOrder = 1,
         },
     }
