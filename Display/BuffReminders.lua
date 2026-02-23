@@ -1720,6 +1720,13 @@ local function ExpandPetActions(frame, entry, frameList)
         return
     end
 
+    -- Hide all extras first (handles shrinking action count cleanly)
+    if frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
+    end
+
     -- Override main frame with first action
     local first = entry.petActions[1]
     frame.icon:SetTexture(first.icon)
