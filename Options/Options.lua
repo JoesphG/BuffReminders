@@ -2447,7 +2447,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     })
 
     local spellRows, nameBox, missingBox
-    local castSpellEditBox, castItemEditBox, macroEditBox
+    local castSpellEditBox, castItemEditBox, macroEditBox, requireItemEditBox
 
     modal:SetScript("OnHide", function()
         if spellRows then
@@ -2471,6 +2471,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         end
         if macroEditBox then
             macroEditBox:ClearFocus()
+        end
+        if requireItemEditBox then
+            requireItemEditBox:ClearFocus()
         end
     end)
 
@@ -2632,18 +2635,14 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         line:SetColorTexture(0.25, 0.25, 0.25, 0.8)
     end
 
-    -- Define column widths
-    local LEFT_COL_WIDTH = 200
-    local RIGHT_COL_X = LEFT_COL_WIDTH + 10
-
-    -- Left column: Display section
-    CreateSeparator(sectionsFrame, 0, LEFT_COL_WIDTH)
-    CreateSectionHeader(sectionsFrame, "DISPLAY", 0, -9)
+    -- Appearance section
+    CreateSeparator(sectionsFrame, 0)
+    CreateSectionHeader(sectionsFrame, "APPEARANCE", 0, -9)
 
     local nameHolder = Components.TextInput(sectionsFrame, {
         label = "Name:",
         value = editingBuff and editingBuff.name or "",
-        width = 140,
+        width = 250,
         labelWidth = 50,
     })
     nameHolder:SetPoint("TOPLEFT", 0, -30)
@@ -2652,19 +2651,19 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     local missingHolder = Components.TextInput(sectionsFrame, {
         label = "Text:",
         value = editingBuff and editingBuff.missingText and editingBuff.missingText:gsub("\n", "\\n") or "",
-        width = 140,
+        width = 250,
         labelWidth = 50,
     })
     missingHolder:SetPoint("TOPLEFT", 0, -54)
     missingBox = missingHolder.editBox
 
     local missingHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    missingHint:SetPoint("TOPLEFT", 0, -74)
+    missingHint:SetPoint("LEFT", missingHolder, "RIGHT", 5, 0)
     missingHint:SetText("(use \\n for line break)")
 
-    -- Left column: Restrictions section
-    CreateSeparator(sectionsFrame, -90, LEFT_COL_WIDTH)
-    CreateSectionHeader(sectionsFrame, "RESTRICTIONS", 0, -99)
+    -- Conditions section (merges restrictions, visibility, advanced)
+    CreateSeparator(sectionsFrame, -76)
+    CreateSectionHeader(sectionsFrame, "CONDITIONS", 0, -85)
 
     local classOptions = {
         { value = nil, label = "Any" },
@@ -2700,9 +2699,10 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             options = specOptions,
             selected = selectedSpecId,
             width = 140,
+            labelWidth = 45,
             onChange = function() end,
         })
-        specDropdownHolder:SetPoint("TOPLEFT", 0, -144)
+        specDropdownHolder:SetPoint("TOPLEFT", 210, -132)
     end
 
     classDropdownHolder = Components.Dropdown(sectionsFrame, {
@@ -2710,21 +2710,18 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         options = classOptions,
         selected = editingBuff and editingBuff.class or nil,
         width = 140,
+        labelWidth = 45,
         maxItems = 10,
         onChange = function(value)
             CreateSpecDropdown(value, nil)
         end,
     }, "BuffRemindersCustomClassDropdown")
-    classDropdownHolder:SetPoint("TOPLEFT", 0, -120)
+    classDropdownHolder:SetPoint("TOPLEFT", 0, -132)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
         CreateSpecDropdown(editingBuff.class, editingBuff.requireSpecId)
     end
-
-    -- Right column: Visibility section
-    CreateSeparator(sectionsFrame, 0, LEFT_COL_WIDTH)
-    CreateSectionHeader(sectionsFrame, "VISIBILITY", RIGHT_COL_X, -9)
 
     showIconToggle = Components.Toggle(sectionsFrame, {
         label = editingBuff and editingBuff.showWhenPresent and "When active" or "When missing",
@@ -2737,18 +2734,33 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             end
         end,
     })
-    showIconToggle:SetPoint("TOPLEFT", RIGHT_COL_X, -30)
+    showIconToggle:SetPoint("TOPLEFT", 0, -106)
 
     requireSpellKnownToggle = Components.Toggle(sectionsFrame, {
         label = "Only if spell known",
         checked = editingBuff and editingBuff.requireSpellKnown or false,
         onChange = function() end,
     })
-    requireSpellKnownToggle:SetPoint("TOPLEFT", RIGHT_COL_X, -52)
+    requireSpellKnownToggle:SetPoint("TOPLEFT", 210, -106)
 
-    -- Advanced section (full width)
-    CreateSeparator(sectionsFrame, -180)
-    CreateSectionHeader(sectionsFrame, "ADVANCED", 0, -189)
+    -- Require item (item gate)
+    local requireItemLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    requireItemLabel:SetPoint("TOPLEFT", 0, -166)
+    requireItemLabel:SetText("Require item:")
+
+    requireItemEditBox = CreateFrame("EditBox", nil, sectionsFrame)
+    requireItemEditBox:SetFontObject("GameFontHighlightSmall")
+    requireItemEditBox:SetAutoFocus(false)
+    local requireItemContainer = StyleEditBox(requireItemEditBox)
+    requireItemContainer:SetSize(70, 20)
+    requireItemContainer:SetPoint("LEFT", requireItemLabel, "RIGHT", 5, 0)
+    if editingBuff and editingBuff.requireItemID then
+        requireItemEditBox:SetText(tostring(editingBuff.requireItemID))
+    end
+
+    local requireItemHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    requireItemHint:SetPoint("LEFT", requireItemContainer, "RIGHT", 5, 0)
+    requireItemHint:SetText("(hide if not owned)")
 
     local glowModeOptions = {
         { value = "whenGlowing", label = "Detect when glowing" },
@@ -2767,11 +2779,11 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         },
         onChange = function() end,
     })
-    glowModeDropdown:SetPoint("TOPLEFT", 0, -210)
+    glowModeDropdown:SetPoint("TOPLEFT", 0, -192)
 
     -- Click action section
-    CreateSeparator(sectionsFrame, -248)
-    CreateSectionHeader(sectionsFrame, "CLICK ACTION", 0, -257)
+    CreateSeparator(sectionsFrame, -224)
+    CreateSectionHeader(sectionsFrame, "CLICK ACTION", 0, -233)
 
     -- Determine existing action type
     local existingActionType = "none"
@@ -2788,7 +2800,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     -- Container for the conditional input (spell/item Lookup or macro text)
     actionInputHolder = CreateFrame("Frame", nil, sectionsFrame)
     actionInputHolder:SetSize(MODAL_WIDTH - 40, 26)
-    actionInputHolder:SetPoint("TOPLEFT", 0, -302)
+    actionInputHolder:SetPoint("TOPLEFT", 0, -284)
 
     -- Spell ID input with Lookup
     castSpellEditBox = CreateFrame("EditBox", nil, actionInputHolder)
@@ -2957,7 +2969,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             UpdateActionInputVisibility(value)
         end,
     })
-    actionTypeDropdown:SetPoint("TOPLEFT", 0, -278)
+    actionTypeDropdown:SetPoint("TOPLEFT", 0, -254)
 
     -- Initialize visibility for the current action type
     UpdateActionInputVisibility(existingActionType)
@@ -3047,6 +3059,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             castSpellID = castSpellIDValue,
             castItemID = castItemIDValue,
             castMacro = castMacroValue,
+            requireItemID = tonumber(strtrim(requireItemEditBox:GetText())) or nil,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff

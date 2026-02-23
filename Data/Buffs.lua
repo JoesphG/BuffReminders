@@ -100,6 +100,7 @@ local _, BR = ...
 ---@field castSpellID? number       -- Spell to cast on click (separate from tracked aura)
 ---@field castItemID? number        -- Item to use on click
 ---@field castMacro? string         -- Raw macro text for click action
+---@field requireItemID? number    -- Only show if this item is equipped or in bags
 
 ---Check if the player's pet is on passive stance
 ---@return boolean? true if pet exists and is on passive, nil otherwise

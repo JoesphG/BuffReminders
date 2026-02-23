@@ -3033,8 +3033,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         BR.BuffState.InvalidateSpellCache()
         BR.PetHelpers.InvalidatePetActions()
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+        BR.BuffState.InvalidateItemCache()
         SetDirty()
     elseif event == "BAG_UPDATE_DELAYED" then
+        BR.BuffState.InvalidateItemCache()
         BR.SecureButtons.InvalidateConsumableCache()
         SetDirty()
         BR.SecureButtons.UpdateActionButtons("consumable")

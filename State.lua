@@ -91,6 +91,10 @@ local cachedSpecId = nil
 -- Off-hand weapon cache (invalidated on equipment/spec change)
 local cachedHasOffHandWeapon = nil
 
+-- Item ownership cache (invalidated on BAG_UPDATE_DELAYED, PLAYER_EQUIPMENT_CHANGED)
+---@type table<number, boolean>
+local cachedItemOwnership = {}
+
 -- Weapon enchant info for current refresh cycle (set once per BuffState.Refresh())
 local currentWeaponEnchants = {
     hasMainHand = false,
@@ -167,6 +171,31 @@ local function IsPlayerSpellCached(spellID)
     local knows = IsPlayerSpell(spellID)
     cachedSpellKnowledge[spellID] = knows
     return knows
+end
+
+---Check if player has an item equipped or in bags (cached)
+---@param itemID number
+---@return boolean
+local function HasItemInBagsOrEquipped(itemID)
+    if cachedItemOwnership[itemID] ~= nil then
+        return cachedItemOwnership[itemID]
+    end
+    local owned = false
+    -- Check bags first via C_Item.GetItemCount
+    local ok, count = pcall(C_Item.GetItemCount, itemID)
+    if ok and count and count > 0 then
+        owned = true
+    else
+        -- Check equipment slots 1-19
+        for slot = 1, 19 do
+            if GetInventoryItemID("player", slot) == itemID then
+                owned = true
+                break
+            end
+        end
+    end
+    cachedItemOwnership[itemID] = owned
+    return owned
 end
 
 -- ============================================================================
@@ -1124,6 +1153,13 @@ function BuffState.Refresh()
         end
 
         if shouldProcess then
+            local gateItemID = buff.requireItemID or buff.castItemID
+            if gateItemID and not HasItemInBagsOrEquipped(gateItemID) then
+                shouldProcess = false
+            end
+        end
+
+        if shouldProcess then
             local shouldShow = ShouldShowSelfBuff(
                 buff.spellID,
                 buff.class,
@@ -1238,6 +1274,11 @@ end
 ---Invalidate off-hand weapon cache (call on PLAYER_EQUIPMENT_CHANGED, PLAYER_SPECIALIZATION_CHANGED)
 function BuffState.InvalidateOffHandCache()
     cachedHasOffHandWeapon = nil
+end
+
+---Invalidate item ownership cache (call on BAG_UPDATE_DELAYED, PLAYER_EQUIPMENT_CHANGED)
+function BuffState.InvalidateItemCache()
+    cachedItemOwnership = {}
 end
 
 -- Export utility functions that display layer still needs
