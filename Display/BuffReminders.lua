@@ -272,6 +272,12 @@ local defaults = {
         consumableDisplayMode = "sub_icons",
         petDisplayMode = "generic", -- "generic" or "expanded"
         petLabels = true,
+        petLabelClasses = {
+            HUNTER = true,
+            WARLOCK = true,
+            DEATHKNIGHT = true,
+            MAGE = true,
+        },
     },
 
     ---@type CategoryVisibility
@@ -1642,7 +1648,9 @@ end
 ---@param petAction PetAction?
 local function UpdatePetLabels(frame, petAction)
     local showLabels = (BuffRemindersDB.defaults or {}).petLabels ~= false
-    if not petAction or not showLabels then
+    local petClassVis = (BuffRemindersDB.defaults or {}).petLabelClasses
+    local classLabelsOff = playerClass and petClassVis and petClassVis[playerClass] == false
+    if not petAction or not showLabels or classLabelsOff then
         if frame._br_pet_label_key then
             frame._br_pet_label_key = nil
             if frame._br_pet_name_text then

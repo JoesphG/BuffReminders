@@ -1527,12 +1527,23 @@ local function CreateSegmentedBar(parent, barConfig)
             else
                 visualState = barConfig.getState(toggle.key) and "on" or "off"
             end
+            local c = toggle.color -- optional per-toggle {r, g, b}
             if visualState == "on" then
-                bg:SetColorTexture(0.18, 0.15, 0.08, 1)
-                btnLabel:SetTextColor(0.9, 0.75, 0.2, 1)
+                if c then
+                    bg:SetColorTexture(c[1] * 0.25, c[2] * 0.25, c[3] * 0.25, 1)
+                    btnLabel:SetTextColor(c[1], c[2], c[3], 1)
+                else
+                    bg:SetColorTexture(0.18, 0.15, 0.08, 1)
+                    btnLabel:SetTextColor(0.9, 0.75, 0.2, 1)
+                end
             elseif visualState == "partial" then
-                bg:SetColorTexture(0.12, 0.08, 0.02, 1)
-                btnLabel:SetTextColor(0.7, 0.5, 0.1, 1)
+                if c then
+                    bg:SetColorTexture(c[1] * 0.15, c[2] * 0.15, c[3] * 0.15, 1)
+                    btnLabel:SetTextColor(c[1] * 0.7, c[2] * 0.7, c[3] * 0.7, 1)
+                else
+                    bg:SetColorTexture(0.12, 0.08, 0.02, 1)
+                    btnLabel:SetTextColor(0.7, 0.5, 0.1, 1)
+                end
             else
                 bg:SetColorTexture(0, 0, 0, 0)
                 btnLabel:SetTextColor(0.4, 0.4, 0.4, 1)
@@ -1575,6 +1586,8 @@ local function CreateSegmentedBar(parent, barConfig)
 
     return container, toggleButtons
 end
+
+Components.CreateSegmentedBar = CreateSegmentedBar
 
 ---Build barConfig for the content-type (W/S/D/R) bar
 ---@param category CategoryName

@@ -1375,8 +1375,8 @@ local function CreateOptionsPanel()
             catLayout:Add(petLabelsHolder, nil, COMPONENT_GAP)
 
             local petLabelScaleHolder = Components.NumericStepper(petLabelsHolder, {
-                label = "%",
-                labelWidth = 14,
+                label = "Size %",
+                labelWidth = 36,
                 min = 50,
                 max = 200,
                 step = 10,
@@ -1391,6 +1391,58 @@ local function CreateOptionsPanel()
                 end,
             })
             petLabelScaleHolder:SetPoint("LEFT", petLabelsHolder, "LEFT", 90, 0)
+
+            -- Pet class label toggles (H/W/D/M) — anchored to the right of the scale stepper
+            local function classColor(cls)
+                local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[cls]
+                if c then
+                    return { c.r, c.g, c.b }
+                end
+                return { 0.5, 0.5, 0.5 }
+            end
+
+            local petClassBar, petClassButtons = Components.CreateSegmentedBar(petLabelsHolder, {
+                toggleDefs = {
+                    { key = "HUNTER", label = "H", tooltip = "Hunter", color = classColor("HUNTER") },
+                    { key = "WARLOCK", label = "W", tooltip = "Warlock", color = classColor("WARLOCK") },
+                    { key = "DEATHKNIGHT", label = "D", tooltip = "Death Knight", color = classColor("DEATHKNIGHT") },
+                    { key = "MAGE", label = "M", tooltip = "Mage", color = classColor("MAGE") },
+                },
+                getState = function(key)
+                    local vis = BuffRemindersDB.defaults.petLabelClasses
+                    return not vis or vis[key] ~= false
+                end,
+                setState = function(key)
+                    if not BuffRemindersDB.defaults.petLabelClasses then
+                        BuffRemindersDB.defaults.petLabelClasses = {
+                            HUNTER = true,
+                            WARLOCK = true,
+                            DEATHKNIGHT = true,
+                            MAGE = true,
+                        }
+                    end
+                    BuffRemindersDB.defaults.petLabelClasses[key] = not BuffRemindersDB.defaults.petLabelClasses[key]
+                end,
+                onChange = function()
+                    UpdateDisplay()
+                end,
+            })
+            petClassBar:SetPoint("LEFT", petLabelScaleHolder, "RIGHT", 8, 0)
+
+            local function isPetLabelsEnabled()
+                return BR.Config.Get("defaults.petLabels", true)
+            end
+            petClassBar:SetBarDisabled(not isPetLabelsEnabled())
+
+            local petClassBarRefreshHolder = CreateFrame("Frame", nil, petLabelsHolder)
+            petClassBarRefreshHolder:SetSize(1, 1)
+            function petClassBarRefreshHolder:Refresh()
+                petClassBar:SetBarDisabled(not isPetLabelsEnabled())
+                for _, btn in ipairs(petClassButtons) do
+                    btn.UpdateVisual()
+                end
+            end
+            table.insert(BR.RefreshableComponents, petClassBarRefreshHolder)
         end
 
         -- Item display mode (consumable only, grouped with icon options)
