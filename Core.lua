@@ -166,6 +166,8 @@ local DefaultSettingKeys = {
     consumableDisplayMode = "DisplayRefresh",
     -- Pet display mode
     petDisplayMode = "DisplayRefresh",
+    petLabels = "DisplayRefresh",
+    petLabelScale = "DisplayRefresh",
     -- Font (global-only, lives under defaults)
     fontFace = "VisualsRefresh",
 }

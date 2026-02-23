@@ -28,6 +28,8 @@ local addonName, BR = ...
 ---@field consumableRebuffColor? number[]
 ---@field consumableDisplayMode? "icon_only"|"sub_icons"|"expanded"
 ---@field petDisplayMode? "generic"|"expanded"
+---@field petLabels? boolean
+---@field petLabelScale? number
 
 ---@class CategorySetting
 ---@field position CategoryPosition
@@ -98,6 +100,9 @@ local addonName, BR = ...
 ---@field isExtraFrame? boolean
 ---@field mainFrame? BuffFrame
 ---@field _br_pet_spell? string             -- Localized spell name for pet click-to-cast
+---@field _br_pet_name_text? FontString    -- Pet name label below icon
+---@field _br_pet_family_text? FontString  -- Pet spec label below name
+---@field _br_pet_extra_text? FontString   -- Spirit Beast label below spec
 ---@field qualityOverlay? FontString         -- Quality rank text (R1/R2/R3) for consumable frames
 ---@field _cachedItems? table|false         -- Per-cycle cache for GetConsumableActionItems result
 
@@ -265,6 +270,7 @@ local defaults = {
         showConsumablesWithoutItems = false,
         consumableDisplayMode = "sub_icons",
         petDisplayMode = "generic", -- "generic" or "expanded"
+        petLabels = true,
     },
 
     ---@type CategoryVisibility
@@ -1621,6 +1627,65 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
     end
 end
 
+---Show or hide pet name/family labels below a frame.
+---@param frame BuffFrame
+---@param petAction PetAction?
+local function UpdatePetLabels(frame, petAction)
+    local showLabels = (BuffRemindersDB.defaults or {}).petLabels ~= false
+    if not petAction or not showLabels then
+        if frame._br_pet_name_text then
+            frame._br_pet_name_text:Hide()
+        end
+        if frame._br_pet_family_text then
+            frame._br_pet_family_text:Hide()
+        end
+        if frame._br_pet_extra_text then
+            frame._br_pet_extra_text:Hide()
+        end
+        return
+    end
+
+    if not frame._br_pet_name_text then
+        frame._br_pet_name_text = frame:CreateFontString(nil, "OVERLAY")
+        frame._br_pet_family_text = frame:CreateFontString(nil, "OVERLAY")
+        frame._br_pet_extra_text = frame:CreateFontString(nil, "OVERLAY")
+    end
+
+    local ratio = ((BuffRemindersDB.defaults or {}).petLabelScale or 100) / 100
+    local nameSize = math.max(7, math.floor(frame:GetWidth() * 0.18 * ratio))
+    local familySize = math.max(7, math.floor(nameSize * 0.85))
+    frame._br_pet_name_text:SetFont(fontPath, nameSize, "OUTLINE")
+    frame._br_pet_name_text:ClearAllPoints()
+    frame._br_pet_name_text:SetPoint("TOP", frame, "BOTTOM", 0, -2)
+    frame._br_pet_name_text:SetText(petAction.label or "")
+    frame._br_pet_name_text:SetTextColor(1, 1, 1)
+    frame._br_pet_name_text:Show()
+
+    local family = petAction.petFamily
+    if family and family ~= "" then
+        frame._br_pet_family_text:SetFont(fontPath, familySize, "OUTLINE")
+        frame._br_pet_family_text:ClearAllPoints()
+        frame._br_pet_family_text:SetPoint("TOP", frame._br_pet_name_text, "BOTTOM", 0, -1)
+        frame._br_pet_family_text:SetText(family)
+        frame._br_pet_family_text:SetTextColor(1, 1, 1)
+        frame._br_pet_family_text:Show()
+    else
+        frame._br_pet_family_text:Hide()
+    end
+
+    if petAction.petSpiritBeast then
+        local anchor = (family and family ~= "") and frame._br_pet_family_text or frame._br_pet_name_text
+        frame._br_pet_extra_text:SetFont(fontPath, familySize, "OUTLINE")
+        frame._br_pet_extra_text:ClearAllPoints()
+        frame._br_pet_extra_text:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
+        frame._br_pet_extra_text:SetText("Spirit Beast")
+        frame._br_pet_extra_text:SetTextColor(1, 1, 1)
+        frame._br_pet_extra_text:Show()
+    else
+        frame._br_pet_extra_text:Hide()
+    end
+end
+
 -- Expand a pet entry's actions into the main frame + extra frames.
 -- The first action overrides the main frame's icon; subsequent actions create extra frames.
 -- Returns the extra frames appended to frameList (if provided).
@@ -1630,6 +1695,7 @@ end
 local function ExpandPetActions(frame, entry, frameList)
     if not entry.petActions or #entry.petActions == 0 or not frame:IsShown() then
         frame._br_pet_spell = nil
+        UpdatePetLabels(frame, nil)
         return
     end
 
@@ -1638,6 +1704,7 @@ local function ExpandPetActions(frame, entry, frameList)
     frame.icon:SetTexture(first.icon)
     frame.count:Hide()
     frame._br_pet_spell = first.spellName
+    UpdatePetLabels(frame, first)
 
     -- Extra frames for remaining actions
     local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
@@ -1650,6 +1717,7 @@ local function ExpandPetActions(frame, entry, frameList)
         extra.count:Hide()
         extra.stackCount:Hide()
         extra._br_pet_spell = action.spellName
+        UpdatePetLabels(extra, action)
         extra:Show()
         SetExpirationGlow(extra, entry.shouldGlow, entry.category, cachedGlow)
         if frameList then
@@ -1677,9 +1745,11 @@ local function ApplyPetDisplayMode(frame, entry, frameList)
         end
         local gi = entry.petActions.genericIndex or 1
         frame._br_pet_spell = entry.petActions[gi] and entry.petActions[gi].spellName
+        UpdatePetLabels(frame, entry.petActions[gi])
         if frame.extraFrames then
             for _, extra in ipairs(frame.extraFrames) do
                 extra:Hide()
+                UpdatePetLabels(extra, nil)
             end
         end
     end
@@ -1860,9 +1930,11 @@ UpdateDisplay = function()
             if frame then
                 HideFrame(frame)
                 frame._cachedItems = nil
+                UpdatePetLabels(frame, nil)
                 if frame.extraFrames then
                     for _, extra in ipairs(frame.extraFrames) do
                         extra:Hide()
+                        UpdatePetLabels(extra, nil)
                     end
                 end
             end

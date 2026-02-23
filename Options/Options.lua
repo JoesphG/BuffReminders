@@ -1299,6 +1299,40 @@ local function CreateOptionsPanel()
                 updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "generic"))
             end
             table.insert(BR.RefreshableComponents, petPreviewHolder)
+
+            local petLabelsHolder = Components.Checkbox(catContent, {
+                label = "Pet labels",
+                get = function()
+                    return BR.Config.Get("defaults.petLabels", true)
+                end,
+                tooltip = {
+                    title = "Pet labels",
+                    desc = "Show pet name and specialization below each icon.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.petLabels", checked)
+                    Components.RefreshAll()
+                end,
+            })
+            catLayout:Add(petLabelsHolder, nil, COMPONENT_GAP)
+
+            local petLabelScaleHolder = Components.NumericStepper(petLabelsHolder, {
+                label = "%",
+                labelWidth = 14,
+                min = 50,
+                max = 200,
+                step = 10,
+                get = function()
+                    return BR.Config.Get("defaults.petLabelScale", 100)
+                end,
+                enabled = function()
+                    return BR.Config.Get("defaults.petLabels", true)
+                end,
+                onChange = function(val)
+                    BR.Config.Set("defaults.petLabelScale", val)
+                end,
+            })
+            petLabelScaleHolder:SetPoint("LEFT", petLabelsHolder, "LEFT", 90, 0)
         end
 
         -- Item display mode (consumable only, grouped with icon options)

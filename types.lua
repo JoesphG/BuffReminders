@@ -10,6 +10,7 @@
 ---@field GetParent fun(self: Frame): Frame?
 ---@field GetWidth fun(self: Frame): number
 ---@field GetHeight fun(self: Frame): number
+---@field CreateFontString fun(self: Frame, name?: string, layer?: string, inherits?: string): FontString
 
 ---@class Button: Frame
 

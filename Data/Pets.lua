@@ -17,6 +17,8 @@ local _, BR = ...
 ---@field icon number
 ---@field label string
 ---@field sortOrder number
+---@field petFamily? string            -- Pet specialization (hunter only, e.g. "Ferocity")
+---@field petSpiritBeast? boolean      -- True if Spirit Beast family
 
 ---@class PetActionList : PetAction[]
 ---@field genericIndex? number  -- Preferred index for generic (collapsed) display mode
@@ -29,6 +31,15 @@ local REVIVE_PET = 982
 
 -- Warlock Summon Demon flyout ID
 local SUMMON_DEMON_FLYOUT = 10
+
+-- Warlock summon spell ID → short pet name (fallback: full spell name)
+local WARLOCK_PET_NAMES = {
+    [688] = "Imp",
+    [697] = "Voidwalker",
+    [691] = "Felhunter",
+    [366222] = "Sayaad",
+    [30146] = "Felguard",
+}
 
 ---Build hunter pet actions from stable info
 ---@return PetAction[]?
@@ -54,6 +65,8 @@ local function BuildHunterActions()
                     icon = info.icon,
                     label = info.name,
                     sortOrder = order,
+                    petFamily = info.specialization,
+                    petSpiritBeast = info.familyName == "Spirit Beast" or nil,
                 }
             end
         end
@@ -100,7 +113,7 @@ local function BuildWarlockActions()
                     spellID = spellID,
                     spellName = info.name,
                     icon = info.iconID,
-                    label = info.name,
+                    label = WARLOCK_PET_NAMES[spellID] or info.name,
                     sortOrder = order,
                 }
             end
