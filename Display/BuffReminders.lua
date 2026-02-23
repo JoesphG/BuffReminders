@@ -100,6 +100,7 @@ local addonName, BR = ...
 ---@field isExtraFrame? boolean
 ---@field mainFrame? BuffFrame
 ---@field _br_pet_spell? string             -- Localized spell name for pet click-to-cast
+---@field _br_pet_label_key? string        -- Cache key for pet label updates
 ---@field _br_pet_name_text? FontString    -- Pet name label below icon
 ---@field _br_pet_family_text? FontString  -- Pet spec label below name
 ---@field _br_pet_extra_text? FontString   -- Spirit Beast label below spec
@@ -1636,22 +1637,34 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
 end
 
 ---Show or hide pet name/family labels below a frame.
+---Skips redundant work if the action and scale haven't changed.
 ---@param frame BuffFrame
 ---@param petAction PetAction?
 local function UpdatePetLabels(frame, petAction)
     local showLabels = (BuffRemindersDB.defaults or {}).petLabels ~= false
     if not petAction or not showLabels then
-        if frame._br_pet_name_text then
-            frame._br_pet_name_text:Hide()
-        end
-        if frame._br_pet_family_text then
-            frame._br_pet_family_text:Hide()
-        end
-        if frame._br_pet_extra_text then
-            frame._br_pet_extra_text:Hide()
+        if frame._br_pet_label_key then
+            frame._br_pet_label_key = nil
+            if frame._br_pet_name_text then
+                frame._br_pet_name_text:Hide()
+            end
+            if frame._br_pet_family_text then
+                frame._br_pet_family_text:Hide()
+            end
+            if frame._br_pet_extra_text then
+                frame._br_pet_extra_text:Hide()
+            end
         end
         return
     end
+
+    -- Early out if nothing changed since last call
+    local scale = (BuffRemindersDB.defaults or {}).petLabelScale or 100
+    local cacheKey = petAction.key .. ":" .. scale
+    if frame._br_pet_label_key == cacheKey then
+        return
+    end
+    frame._br_pet_label_key = cacheKey
 
     if not frame._br_pet_name_text then
         frame._br_pet_name_text = frame:CreateFontString(nil, "OVERLAY")
@@ -1659,7 +1672,7 @@ local function UpdatePetLabels(frame, petAction)
         frame._br_pet_extra_text = frame:CreateFontString(nil, "OVERLAY")
     end
 
-    local ratio = ((BuffRemindersDB.defaults or {}).petLabelScale or 100) / 100
+    local ratio = scale / 100
     local nameSize = math.max(7, math.floor(frame:GetWidth() * 0.18 * ratio))
     local familySize = math.max(7, math.floor(nameSize * 0.85))
     frame._br_pet_name_text:SetFont(fontPath, nameSize, "OUTLINE")
