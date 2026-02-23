@@ -214,7 +214,19 @@ BR.BUFF_TABLES = {
             name = "Earth Shield",
             class = "SHAMAN",
             missingText = "NO\nES",
+            castOnOthers = true,
+            groupId = "earthShieldTargeting",
             infoTooltip = "May Show Extra Icon|Until you cast this, you might see both this and the Water/Lightning Shield reminder. I can't tell if you want Earth Shield on yourself, or Earth Shield on an ally + Water/Lightning Shield on yourself.",
+        },
+        {
+            spellID = 974,
+            buffIdOverride = { 383648, 974 },
+            key = "earthShieldPlayer",
+            name = "Earth Shield (Player)",
+            class = "SHAMAN",
+            missingText = "NO\nES",
+            groupId = "earthShieldTargeting",
+            infoTooltip = "Earth Shield Self Cast|Shows a dedicated Earth Shield icon that always casts on you.",
         },
         {
             spellID = 369459,
@@ -680,6 +692,7 @@ BR.BUFF_TABLES = {
 ---@type table<string, BuffGroup>
 BR.BuffGroups = {
     beacons = { displayName = "Beacons" },
+    earthShieldTargeting = { displayName = "Earth Shield Targeting" },
     shamanImbues = { displayName = "Shaman Imbues" },
     paladinRites = { displayName = "Paladin Rites" },
     pets = { displayName = "Pets" },

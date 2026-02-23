@@ -115,6 +115,17 @@ local currentValidUnits = {}
 local unitEntryPool = {}
 local unitEntryPoolSize = 0
 
+---Get a unit's full name (with realm when available), normalized for macro targeting.
+---@param unit string
+---@return string?
+local function GetNormalizedUnitName(unit)
+    local name = GetUnitName(unit, true)
+    if name and name ~= "" then
+        return name
+    end
+    return nil
+end
+
 ---Get a unit entry from the pool or create a new one
 ---@param unit string
 ---@param class string
@@ -558,9 +569,11 @@ end
 ---@param spellIDs SpellID
 ---@param requiredClass ClassName
 ---@param beneficiaryRole? RoleType
+---@param buffKey? string
+---@param excludePlayer? boolean
 ---@return boolean? shouldShow Returns nil if player can't provide this buff
 ---@return number? remainingTime
-local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, requireSpecId)
+local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, requireSpecId, buffKey, excludePlayer)
     if playerClass ~= requiredClass then
         return nil
     end
@@ -578,7 +591,40 @@ local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, 
         return nil
     end
 
-    local isActive, remaining = IsPlayerBuffActive(spellID, beneficiaryRole)
+    local minRemaining = nil
+    local stickyUnitName = nil
+    local found = false
+    for _, data in ipairs(currentValidUnits) do
+        if (not beneficiaryRole or UnitGroupRolesAssigned(data.unit) == beneficiaryRole) and (not excludePlayer or not data.isPlayer) then
+            local hasBuff, remaining, sourceUnit = UnitHasBuff(data.unit, spellID)
+            if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
+                found = true
+                if not data.isPlayer and not stickyUnitName then
+                    stickyUnitName = GetNormalizedUnitName(data.unit)
+                end
+                if not remaining then
+                    minRemaining = nil
+                    break
+                end
+                if not minRemaining or remaining < minRemaining then
+                    minRemaining = remaining
+                end
+            end
+        end
+    end
+
+    local jgTargeting = BuffRemindersDB and (BuffRemindersDB.jgTargeting or BuffRemindersDB.targeting)
+    if buffKey and jgTargeting and jgTargeting.enableStickyTargeting then
+        jgTargeting.stickyTargets = jgTargeting.stickyTargets or {}
+        if stickyUnitName then
+            jgTargeting.stickyTargets[buffKey] = stickyUnitName
+        elseif found then
+            jgTargeting.stickyTargets[buffKey] = nil
+        end
+    end
+
+    local isActive = found
+    local remaining = minRemaining
     return not isActive, remaining
 end
 
@@ -678,6 +724,7 @@ local EATING_AURA_ICON = BR.EATING_AURA_ICON
 
 -- Event-driven eating state: tracked via UNIT_AURA payload, no per-render scanning.
 local eatingAuraInstanceID = nil
+local eatingAuraExpirationTime = nil
 
 ---Check if the player is currently eating (reads cached flag, O(1))
 ---@return boolean
@@ -685,9 +732,23 @@ local function IsPlayerEating()
     return eatingAuraInstanceID ~= nil
 end
 
+---Get remaining time on the active eating aura.
+---@return number?
+local function GetEatingRemaining()
+    if not eatingAuraExpirationTime or eatingAuraExpirationTime <= 0 then
+        return nil
+    end
+    local remaining = eatingAuraExpirationTime - GetTime()
+    if remaining > 0 then
+        return remaining
+    end
+    return nil
+end
+
 ---Full aura scan to seed eating state (call once on init / reload)
 local function ScanEatingState()
     eatingAuraInstanceID = nil
+    eatingAuraExpirationTime = nil
     local i = 1
     local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
     while auraData do
@@ -696,6 +757,9 @@ local function ScanEatingState()
         end)
         if ok and match then
             eatingAuraInstanceID = auraData.auraInstanceID
+            if auraData.expirationTime and auraData.expirationTime > 0 then
+                eatingAuraExpirationTime = auraData.expirationTime
+            end
             return
         end
         i = i + 1
@@ -716,6 +780,22 @@ local function UpdateEatingState(updateInfo)
             end)
             if ok and match then
                 eatingAuraInstanceID = aura.auraInstanceID
+                if aura.expirationTime and aura.expirationTime > 0 then
+                    eatingAuraExpirationTime = aura.expirationTime
+                else
+                    eatingAuraExpirationTime = nil
+                end
+                break
+            end
+        end
+    end
+    if updateInfo.updatedAuraInstanceIDs and eatingAuraInstanceID then
+        for _, id in ipairs(updateInfo.updatedAuraInstanceIDs) do
+            if id == eatingAuraInstanceID then
+                local aura = C_UnitAuras.GetAuraDataByAuraInstanceID("player", id)
+                if aura and aura.expirationTime and aura.expirationTime > 0 then
+                    eatingAuraExpirationTime = aura.expirationTime
+                end
                 break
             end
         end
@@ -724,10 +804,78 @@ local function UpdateEatingState(updateInfo)
         for _, id in ipairs(updateInfo.removedAuraInstanceIDs) do
             if id == eatingAuraInstanceID then
                 eatingAuraInstanceID = nil
+                eatingAuraExpirationTime = nil
                 break
             end
         end
     end
+end
+
+---Ensure targeting-related DB tables/flags exist.
+---@param db table
+local function EnsureTargetingDB(db)
+    local t = db.jgTargeting or db.targeting
+    if not t then
+        t = {}
+        db.jgTargeting = t
+    end
+    if t.enableStickyTargeting == nil then
+        t.enableStickyTargeting = true
+    end
+    if t.showPlayerIcon == nil then
+        -- Compatibility with legacy table shape
+        t.showPlayerIcon = not db.earthShieldOverride or db.earthShieldOverride.showPlayerIcon ~= false
+    end
+    if t.showTargetIcon == nil then
+        t.showTargetIcon = not db.earthShieldOverride or db.earthShieldOverride.showTargetIcon ~= false
+    end
+    if t.disableTargetWhenSolo == nil then
+        t.disableTargetWhenSolo = not db.earthShieldOverride or db.earthShieldOverride.disableTargetWhenSolo ~= false
+    end
+    t.stickyTargets = t.stickyTargets or db.stickyTargets or {}
+    db.jgTargeting = t
+end
+
+---Remove sticky targets that are no longer valid group members.
+---@param db table
+local function PruneStickyTargets(db)
+    local t = db.jgTargeting
+    if not t or not t.stickyTargets then
+        return
+    end
+    local validNames = {}
+    for _, data in ipairs(currentValidUnits) do
+        if not data.isPlayer then
+            local fullName = GetNormalizedUnitName(data.unit)
+            if fullName then
+                validNames[fullName] = true
+            end
+        end
+    end
+    for buffKey, unitName in pairs(t.stickyTargets) do
+        if not validNames[unitName] then
+            t.stickyTargets[buffKey] = nil
+        end
+    end
+end
+
+---Get sticky target unit name for a buff key.
+---@param buffKey string
+---@return string?
+local function GetStickyTarget(buffKey)
+    local db = BuffRemindersDB
+    local t = db and (db.jgTargeting or db.targeting)
+    if not t or not t.enableStickyTargeting then
+        return nil
+    end
+    if not t.stickyTargets then
+        return nil
+    end
+    local unitName = t.stickyTargets[buffKey]
+    if type(unitName) ~= "string" or unitName == "" then
+        return nil
+    end
+    return unitName
 end
 
 ---Check if player is missing a consumable buff, weapon enchant, or inventory item (returns true if missing)
@@ -926,6 +1074,9 @@ function BuffState.Refresh()
         return
     end
 
+    EnsureTargetingDB(db)
+    local jgTargeting = db.jgTargeting
+
     -- Invalidate off-hand weapon cache each refresh cycle (cheap lazy re-check)
     cachedHasOffHandWeapon = nil
 
@@ -943,6 +1094,7 @@ function BuffState.Refresh()
 
     -- Build valid unit cache once per refresh cycle
     BuildValidUnitCache()
+    PruneStickyTargets(db)
 
     -- Fetch weapon enchant info once per refresh cycle
     local hasMain, mainExp, _, mainID, hasOff, offExp, _, offID = GetWeaponEnchantInfo()
@@ -1025,10 +1177,45 @@ function BuffState.Refresh()
     for i, buff in ipairs(TargetedBuffs) do
         local entry = GetOrCreateEntry(buff.key, "targeted", i)
         local settingKey = GetBuffSettingKey(buff)
+        local shouldProcess = IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db)
 
-        if IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db) then
-            local shouldShow, remaining =
-                ShouldShowTargetedBuff(buff.spellID, buff.class, buff.beneficiaryRole, buff.requireSpecId)
+        if shouldProcess and buff.key == "earthShieldPlayer" then
+            shouldProcess = jgTargeting.showPlayerIcon ~= false
+        end
+        if shouldProcess and buff.key == "earthShieldOthers" then
+            shouldProcess = jgTargeting.showTargetIcon ~= false
+                and not (jgTargeting.disableTargetWhenSolo and GetNumGroupMembers() == 0)
+        end
+
+        if shouldProcess then
+            local shouldShow, remaining
+            if buff.key == "earthShieldPlayer" then
+                shouldShow = ShouldShowSelfBuff(
+                    buff.spellID,
+                    buff.class,
+                    nil,
+                    buff.requiresSpellID,
+                    buff.excludeSpellID,
+                    buff.buffIdOverride,
+                    buff.customCheck,
+                    buff.requireSpecId,
+                    nil,
+                    nil
+                )
+                if shouldShow == false then
+                    local _, rem = UnitHasBuff("player", buff.buffIdOverride or buff.spellID)
+                    remaining = rem
+                end
+            else
+                shouldShow, remaining = ShouldShowTargetedBuff(
+                    buff.spellID,
+                    buff.class,
+                    buff.beneficiaryRole,
+                    buff.requireSpecId,
+                    buff.key,
+                    buff.key == "earthShieldOthers"
+                )
+            end
 
             if shouldShow then
                 SetEntryMissing(entry, buff.missingText, targGlowMissing)
@@ -1130,7 +1317,16 @@ function BuffState.Refresh()
             end
             -- Eating state for food entries (display uses this for icon override)
             if entry.visible and buff.key == "food" then
-                entry.isEating = IsPlayerEating()
+                local isEating = IsPlayerEating()
+                if isEating and entry.displayType == "missing" then
+                    entry.isEating = true
+                    local eatingRemaining = GetEatingRemaining()
+                    if eatingRemaining then
+                        entry.countText = FormatRemainingTime(eatingRemaining)
+                    end
+                else
+                    entry.isEating = nil
+                end
             end
         end
     end
@@ -1299,6 +1495,8 @@ BR.StateHelpers = {
     IsCategoryVisibleForContent = IsCategoryVisibleForContent,
     GetBuffSettingKey = GetBuffSettingKey,
     IsBuffEnabled = IsBuffEnabled,
+    GetStickyTarget = GetStickyTarget,
+    IsValidGroupMember = IsValidGroupMember,
 }
 
 -- Export the module

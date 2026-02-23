@@ -246,6 +246,13 @@ local defaults = {
     readyCheckDuration = 15, -- seconds
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
     showLoginMessages = true,
+    jgTargeting = {
+        enableStickyTargeting = true,
+        showPlayerIcon = true,
+        showTargetIcon = true,
+        disableTargetWhenSolo = true,
+        stickyTargets = {},
+    },
 
     -- Global defaults (inherited by categories unless overridden)
     ---@type DefaultSettings
@@ -337,7 +344,7 @@ local defaults = {
             position = { point = "CENTER", x = 0, y = -20 },
             useCustomAppearance = false,
             split = false,
-            clickable = false,
+            clickable = true,
             clickableHighlight = true,
             priority = 3,
         },
@@ -1527,7 +1534,13 @@ local function RenderVisibleEntry(frame, entry)
     if entry.isEating then
         frame.icon:SetTexture(EATING_ICON)
         frame._br_eating_icon = true
-        frame.count:Hide()
+        if entry.countText and entry.countText ~= "" then
+            frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
+            frame.count:SetText(entry.countText)
+            frame.count:Show()
+        else
+            frame.count:Hide()
+        end
         frame:Show()
         SetExpirationGlow(frame, false)
         return true
@@ -1592,11 +1605,22 @@ end
 ---@param entry BuffStateEntry
 ---@param frameList table[] List to append extra frames to (for positioning)
 ---@param parentFrame Frame Parent for extra frames
+local function ClearConsumableDynamicDisplay(frame)
+    BR.SecureButtons.UpdateConsumableButtons(frame, nil)
+    if frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
+    end
+end
+
 local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
     if entry.displayType ~= "missing" or entry.isEating then
+        ClearConsumableDynamicDisplay(frame)
         return
     end
     if not BUFF_KEY_TO_CATEGORY[frame.key] or not frame:IsShown() then
+        ClearConsumableDynamicDisplay(frame)
         return
     end
 
@@ -2497,7 +2521,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- ====================================================================
         -- Versioned migrations — each runs exactly once, tracked by dbVersion
         -- ====================================================================
-        local DB_VERSION = 16
+        local DB_VERSION = 17
 
         local migrations = {
             -- [1] Consolidate all pre-versioning migrations (v2.8 → v3.x)
@@ -2911,6 +2935,43 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                             end
                         end
                     end
+                end
+            end,
+            -- [17] Enable targeted click-cast and migrate ES targeting keys to jgTargeting.
+            [17] = function()
+                if not db.categorySettings then
+                    db.categorySettings = {}
+                end
+                if not db.categorySettings.targeted then
+                    db.categorySettings.targeted = {}
+                end
+                db.categorySettings.targeted.clickable = true
+                if db.categorySettings.targeted.clickableHighlight == nil then
+                    db.categorySettings.targeted.clickableHighlight = true
+                end
+
+                if not db.jgTargeting then
+                    db.jgTargeting = {}
+                end
+                local t = db.jgTargeting
+                if t.enableStickyTargeting == nil and db.targeting and db.targeting.enableStickyTargeting ~= nil then
+                    t.enableStickyTargeting = db.targeting.enableStickyTargeting
+                end
+                if t.showPlayerIcon == nil and db.earthShieldOverride and db.earthShieldOverride.showPlayerIcon ~= nil then
+                    t.showPlayerIcon = db.earthShieldOverride.showPlayerIcon
+                end
+                if t.showTargetIcon == nil and db.earthShieldOverride and db.earthShieldOverride.showTargetIcon ~= nil then
+                    t.showTargetIcon = db.earthShieldOverride.showTargetIcon
+                end
+                if
+                    t.disableTargetWhenSolo == nil
+                    and db.earthShieldOverride
+                    and db.earthShieldOverride.disableTargetWhenSolo ~= nil
+                then
+                    t.disableTargetWhenSolo = db.earthShieldOverride.disableTargetWhenSolo
+                end
+                if t.stickyTargets == nil and db.stickyTargets ~= nil then
+                    t.stickyTargets = db.stickyTargets
                 end
             end,
         }

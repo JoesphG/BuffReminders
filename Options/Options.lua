@@ -32,7 +32,7 @@ local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
 
 -- Categories that expose the "Click to cast" toggle (custom has per-buff actions instead)
-local CLICKABLE_CATEGORIES = { raid = true, presence = true, self = true, consumable = true, pet = true }
+local CLICKABLE_CATEGORIES = { raid = true, presence = true, targeted = true, self = true, consumable = true, pet = true }
 
 -- Glow module
 local Glow = BR.Glow
@@ -562,6 +562,7 @@ local function CreateOptionsPanel()
                 if not seenGroups[buff.groupId] then
                     seenGroups[buff.groupId] = true
                     local groupInfo = BuffGroups[buff.groupId]
+                    local groupDisplayName = (groupInfo and groupInfo.displayName) or buff.name or buff.groupId
                     local displayIcon = groupIconOverrides[buff.groupId]
                     if displayIcon and #displayIcon == 0 then
                         displayIcon = nil
@@ -577,7 +578,7 @@ local function CreateOptionsPanel()
                         y,
                         spells,
                         buff.groupId,
-                        groupInfo.displayName,
+                        groupDisplayName,
                         buff.infoTooltip,
                         displayIcon,
                         groupReadyCheckOnly[buff.groupId]
@@ -627,6 +628,89 @@ local function CreateOptionsPanel()
     buffsLeftY = buffsLeftY - 14
     buffsLeftY = RenderBuffCheckboxes(buffsContent, buffsLeftX, buffsLeftY, TargetedBuffs)
     buffsLeftY = buffsLeftY - SECTION_SPACING
+
+    -- Targeting behavior
+    _, buffsLeftY = CreateSectionHeader(buffsContent, "Targeting", buffsLeftX, buffsLeftY)
+    local targetingNote = buffsContent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    targetingNote:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    targetingNote:SetText("(sticky targeting and Earth Shield icon behavior)")
+    buffsLeftY = buffsLeftY - 14
+
+    local stickyTargetHolder = Components.Checkbox(buffsContent, {
+        label = "Enable sticky targeting",
+        get = function()
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.targeting
+            if not jgTargeting then
+                return true
+            end
+            return jgTargeting.enableStickyTargeting ~= false
+        end,
+        onChange = function(checked)
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.enableStickyTargeting = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    stickyTargetHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT
+
+    local esPlayerHolder = Components.Checkbox(buffsContent, {
+        label = "Show Earth Shield player icon",
+        get = function()
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.earthShieldOverride
+            if not jgTargeting then
+                return true
+            end
+            return jgTargeting.showPlayerIcon ~= false
+        end,
+        onChange = function(checked)
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.showPlayerIcon = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    esPlayerHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT
+
+    local esTargetHolder = Components.Checkbox(buffsContent, {
+        label = "Show Earth Shield target icon",
+        get = function()
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.earthShieldOverride
+            if not jgTargeting then
+                return true
+            end
+            return jgTargeting.showTargetIcon ~= false
+        end,
+        onChange = function(checked)
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.showTargetIcon = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    esTargetHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT
+
+    local esSoloHolder = Components.Checkbox(buffsContent, {
+        label = "Hide ES target icon when solo",
+        get = function()
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.earthShieldOverride
+            if not jgTargeting then
+                return true
+            end
+            return jgTargeting.disableTargetWhenSolo ~= false
+        end,
+        onChange = function(checked)
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.disableTargetWhenSolo = checked
+            UpdateDisplay()
+            Components.RefreshAll()
+        end,
+    })
+    esSoloHolder:SetPoint("TOPLEFT", buffsLeftX, buffsLeftY)
+    buffsLeftY = buffsLeftY - ITEM_HEIGHT - SECTION_SPACING
 
     -- Consumables
     _, buffsLeftY = CreateSectionHeader(buffsContent, "Consumables", buffsLeftX, buffsLeftY)
@@ -2296,6 +2380,18 @@ local function CreateOptionsPanel()
         end,
     })
     setLayout:Add(loginMsgHolder)
+
+    -- Standalone extension hook (keeps extension settings outside core Options logic).
+    if BR.JG and BR.JG.BuildSettingsSection then
+        BR.JG.BuildSettingsSection(settingsContent, setLayout, {
+            Components = Components,
+            LayoutSectionHeader = LayoutSectionHeader,
+            UpdateDisplay = UpdateDisplay,
+            setX = setX,
+            COMPONENT_GAP = COMPONENT_GAP,
+            SECTION_GAP = SECTION_GAP,
+        })
+    end
 
     -- ========== IMPORT/EXPORT TAB ==========
     -- Use simple frame (not scrollable) to avoid nested scroll frame issues with edit boxes

@@ -18,11 +18,15 @@ Core.lua
 Data\Buffs.lua
 Data\ConsumableItems.lua
 Data\Pets.lua
+Extensions\JG\Bootstrap.lua
 State.lua
+Extensions\JG\PostRefresh.lua
 UI\Components.lua
 UI\Glow.lua
 Display\BuffReminders.lua
 Display\ImportExport.lua
 Display\Movers.lua
 Display\SecureButtons.lua
+Extensions\JG\PetHover.lua
+Extensions\JG\OptionsSection.lua
 Options\Options.lua
