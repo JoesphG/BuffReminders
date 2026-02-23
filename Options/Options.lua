@@ -418,21 +418,73 @@ local function CreateOptionsPanel()
     end
 
     -- Create buff checkbox using Components.Checkbox
-    local function CreateBuffCheckbox(parent, x, y, spellIDs, key, displayName, infoTooltip, displayIcon)
+    local function CreateBuffCheckbox(
+        parent,
+        x,
+        y,
+        spellIDs,
+        key,
+        displayName,
+        infoTooltip,
+        displayIcon,
+        readyCheckOnly
+    )
         local holder = Components.Checkbox(parent, {
             label = displayName,
             icons = ResolveBuffIcons(displayIcon, spellIDs),
-            infoTooltip = infoTooltip,
+            infoTooltip = not readyCheckOnly and infoTooltip or nil,
             get = function()
                 return BuffRemindersDB.enabledBuffs[key] ~= false
             end,
             onChange = function(checked)
                 BuffRemindersDB.enabledBuffs[key] = checked
                 UpdateDisplay()
+                if readyCheckOnly then
+                    Components.RefreshAll()
+                end
             end,
         })
         holder:SetPoint("TOPLEFT", x, y)
         panel.buffCheckboxes[key] = holder
+
+        -- Inline toggle: "Ready check only" / "Always show" (replaces info tooltip icon)
+        if readyCheckOnly then
+            local function GetReadyCheckOnlyState()
+                local overrides = BuffRemindersDB.readyCheckOnlyOverrides
+                return not overrides or overrides[key] ~= false
+            end
+
+            local function ToggleLabel(checked)
+                return checked and "Ready check" or "Always"
+            end
+
+            local toggle
+            toggle = Components.Toggle(holder, {
+                label = ToggleLabel(GetReadyCheckOnlyState()),
+                get = GetReadyCheckOnlyState,
+                enabled = function()
+                    return BuffRemindersDB.enabledBuffs[key] ~= false
+                end,
+                onChange = function(checked)
+                    if checked then
+                        -- Ready check only (default): remove override
+                        BR.Config.Set("readyCheckOnlyOverrides." .. key, nil)
+                    else
+                        -- Always show: store explicit false
+                        BR.Config.Set("readyCheckOnlyOverrides." .. key, false)
+                    end
+                    toggle.label:SetText(ToggleLabel(checked))
+                end,
+            })
+            -- Also update label text on Refresh (wrap original Refresh)
+            local origRefresh = toggle.Refresh
+            function toggle:Refresh()
+                origRefresh(self)
+                self.label:SetText(ToggleLabel(GetReadyCheckOnlyState()))
+            end
+            toggle:SetPoint("LEFT", holder.label, "RIGHT", 6, 0)
+        end
+
         return y - ITEM_HEIGHT
     end
 
@@ -444,6 +496,7 @@ local function CreateOptionsPanel()
         local groupSpells = {}
         local groupDisplaySpells = {}
         local groupIconOverrides = {}
+        local groupReadyCheckOnly = {}
 
         for _, buff in ipairs(buffArray) do
             if buff.groupId then
@@ -497,6 +550,9 @@ local function CreateOptionsPanel()
                         end
                     end
                 end
+                if buff.readyCheckOnly then
+                    groupReadyCheckOnly[buff.groupId] = true
+                end
             end
         end
 
@@ -524,7 +580,8 @@ local function CreateOptionsPanel()
                         buff.groupId,
                         groupDisplayName,
                         buff.infoTooltip,
-                        displayIcon
+                        displayIcon,
+                        groupReadyCheckOnly[buff.groupId]
                     )
                 end
             else
@@ -537,7 +594,8 @@ local function CreateOptionsPanel()
                     buff.key,
                     buff.name,
                     buff.infoTooltip,
-                    buff.displayIcon
+                    buff.displayIcon,
+                    buff.readyCheckOnly
                 )
             end
         end
@@ -581,16 +639,15 @@ local function CreateOptionsPanel()
     local stickyTargetHolder = Components.Checkbox(buffsContent, {
         label = "Enable sticky targeting",
         get = function()
-            if not BuffRemindersDB.targeting then
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.targeting
+            if not jgTargeting then
                 return true
             end
-            return BuffRemindersDB.targeting.enableStickyTargeting ~= false
+            return jgTargeting.enableStickyTargeting ~= false
         end,
         onChange = function(checked)
-            if not BuffRemindersDB.targeting then
-                BuffRemindersDB.targeting = {}
-            end
-            BuffRemindersDB.targeting.enableStickyTargeting = checked
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.enableStickyTargeting = checked
             UpdateDisplay()
             Components.RefreshAll()
         end,
@@ -601,16 +658,15 @@ local function CreateOptionsPanel()
     local esPlayerHolder = Components.Checkbox(buffsContent, {
         label = "Show Earth Shield player icon",
         get = function()
-            if not BuffRemindersDB.earthShieldOverride then
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.earthShieldOverride
+            if not jgTargeting then
                 return true
             end
-            return BuffRemindersDB.earthShieldOverride.showPlayerIcon ~= false
+            return jgTargeting.showPlayerIcon ~= false
         end,
         onChange = function(checked)
-            if not BuffRemindersDB.earthShieldOverride then
-                BuffRemindersDB.earthShieldOverride = {}
-            end
-            BuffRemindersDB.earthShieldOverride.showPlayerIcon = checked
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.showPlayerIcon = checked
             UpdateDisplay()
             Components.RefreshAll()
         end,
@@ -621,16 +677,15 @@ local function CreateOptionsPanel()
     local esTargetHolder = Components.Checkbox(buffsContent, {
         label = "Show Earth Shield target icon",
         get = function()
-            if not BuffRemindersDB.earthShieldOverride then
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.earthShieldOverride
+            if not jgTargeting then
                 return true
             end
-            return BuffRemindersDB.earthShieldOverride.showTargetIcon ~= false
+            return jgTargeting.showTargetIcon ~= false
         end,
         onChange = function(checked)
-            if not BuffRemindersDB.earthShieldOverride then
-                BuffRemindersDB.earthShieldOverride = {}
-            end
-            BuffRemindersDB.earthShieldOverride.showTargetIcon = checked
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.showTargetIcon = checked
             UpdateDisplay()
             Components.RefreshAll()
         end,
@@ -641,16 +696,15 @@ local function CreateOptionsPanel()
     local esSoloHolder = Components.Checkbox(buffsContent, {
         label = "Hide ES target icon when solo",
         get = function()
-            if not BuffRemindersDB.earthShieldOverride then
+            local jgTargeting = BuffRemindersDB.jgTargeting or BuffRemindersDB.earthShieldOverride
+            if not jgTargeting then
                 return true
             end
-            return BuffRemindersDB.earthShieldOverride.disableTargetWhenSolo ~= false
+            return jgTargeting.disableTargetWhenSolo ~= false
         end,
         onChange = function(checked)
-            if not BuffRemindersDB.earthShieldOverride then
-                BuffRemindersDB.earthShieldOverride = {}
-            end
-            BuffRemindersDB.earthShieldOverride.disableTargetWhenSolo = checked
+            BuffRemindersDB.jgTargeting = BuffRemindersDB.jgTargeting or {}
+            BuffRemindersDB.jgTargeting.disableTargetWhenSolo = checked
             UpdateDisplay()
             Components.RefreshAll()
         end,
@@ -1399,6 +1453,92 @@ local function CreateOptionsPanel()
                 updatePetDisplayModePreview(BR.Config.Get("defaults.petDisplayMode", "generic"))
             end
             table.insert(BR.RefreshableComponents, petPreviewHolder)
+
+            local petLabelsHolder = Components.Checkbox(catContent, {
+                label = "Pet labels",
+                get = function()
+                    return BR.Config.Get("defaults.petLabels", true)
+                end,
+                tooltip = {
+                    title = "Pet labels",
+                    desc = "Show pet name and specialization below each icon.",
+                },
+                onChange = function(checked)
+                    BR.Config.Set("defaults.petLabels", checked)
+                    Components.RefreshAll()
+                end,
+            })
+            catLayout:Add(petLabelsHolder, nil, COMPONENT_GAP)
+
+            local petLabelScaleHolder = Components.NumericStepper(petLabelsHolder, {
+                label = "Size %",
+                labelWidth = 36,
+                min = 50,
+                max = 200,
+                step = 10,
+                get = function()
+                    return BR.Config.Get("defaults.petLabelScale", 100)
+                end,
+                enabled = function()
+                    return BR.Config.Get("defaults.petLabels", true)
+                end,
+                onChange = function(val)
+                    BR.Config.Set("defaults.petLabelScale", val)
+                end,
+            })
+            petLabelScaleHolder:SetPoint("LEFT", petLabelsHolder, "LEFT", 90, 0)
+
+            -- Pet class label toggles (H/W/D/M) — anchored to the right of the scale stepper
+            local function classColor(cls)
+                local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[cls]
+                if c then
+                    return { c.r, c.g, c.b }
+                end
+                return { 0.5, 0.5, 0.5 }
+            end
+
+            local petClassBar, petClassButtons = Components.CreateSegmentedBar(petLabelsHolder, {
+                toggleDefs = {
+                    { key = "HUNTER", label = "H", tooltip = "Hunter", color = classColor("HUNTER") },
+                    { key = "WARLOCK", label = "W", tooltip = "Warlock", color = classColor("WARLOCK") },
+                    { key = "DEATHKNIGHT", label = "D", tooltip = "Death Knight", color = classColor("DEATHKNIGHT") },
+                    { key = "MAGE", label = "M", tooltip = "Mage", color = classColor("MAGE") },
+                },
+                getState = function(key)
+                    local vis = BuffRemindersDB.defaults.petLabelClasses
+                    return not vis or vis[key] ~= false
+                end,
+                setState = function(key)
+                    if not BuffRemindersDB.defaults.petLabelClasses then
+                        BuffRemindersDB.defaults.petLabelClasses = {
+                            HUNTER = true,
+                            WARLOCK = true,
+                            DEATHKNIGHT = true,
+                            MAGE = true,
+                        }
+                    end
+                    BuffRemindersDB.defaults.petLabelClasses[key] = not BuffRemindersDB.defaults.petLabelClasses[key]
+                end,
+                onChange = function()
+                    UpdateDisplay()
+                end,
+            })
+            petClassBar:SetPoint("LEFT", petLabelScaleHolder, "RIGHT", 8, 0)
+
+            local function isPetLabelsEnabled()
+                return BR.Config.Get("defaults.petLabels", true)
+            end
+            petClassBar:SetBarDisabled(not isPetLabelsEnabled())
+
+            local petClassBarRefreshHolder = CreateFrame("Frame", nil, petLabelsHolder)
+            petClassBarRefreshHolder:SetSize(1, 1)
+            function petClassBarRefreshHolder:Refresh()
+                petClassBar:SetBarDisabled(not isPetLabelsEnabled())
+                for _, btn in ipairs(petClassButtons) do
+                    btn.UpdateVisual()
+                end
+            end
+            table.insert(BR.RefreshableComponents, petClassBarRefreshHolder)
         end
 
         -- Item display mode (consumable only, grouped with icon options)
@@ -2420,6 +2560,7 @@ ShowGlowDemo = function()
 
     local demoPanel = CreatePanel("BuffRemindersGlowDemo", numTypes * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
         strata = "TOOLTIP",
+        modal = true,
     })
 
     local demoTitle = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2555,11 +2696,11 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         bgColor = { 0.1, 0.1, 0.1, 0.98 },
         borderColor = { 0.4, 0.4, 0.4, 1 },
         level = 200,
-        escClose = true,
+        modal = true,
     })
 
     local spellRows, nameBox, missingBox
-    local castSpellEditBox, castItemEditBox, macroEditBox
+    local castSpellEditBox, castItemEditBox, macroEditBox, requireItemEditBox
 
     modal:SetScript("OnHide", function()
         if spellRows then
@@ -2583,6 +2724,9 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         end
         if macroEditBox then
             macroEditBox:ClearFocus()
+        end
+        if requireItemEditBox then
+            requireItemEditBox:ClearFocus()
         end
     end)
 
@@ -2744,18 +2888,14 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         line:SetColorTexture(0.25, 0.25, 0.25, 0.8)
     end
 
-    -- Define column widths
-    local LEFT_COL_WIDTH = 200
-    local RIGHT_COL_X = LEFT_COL_WIDTH + 10
-
-    -- Left column: Display section
-    CreateSeparator(sectionsFrame, 0, LEFT_COL_WIDTH)
-    CreateSectionHeader(sectionsFrame, "DISPLAY", 0, -9)
+    -- Appearance section
+    CreateSeparator(sectionsFrame, 0)
+    CreateSectionHeader(sectionsFrame, "APPEARANCE", 0, -9)
 
     local nameHolder = Components.TextInput(sectionsFrame, {
         label = "Name:",
         value = editingBuff and editingBuff.name or "",
-        width = 140,
+        width = 250,
         labelWidth = 50,
     })
     nameHolder:SetPoint("TOPLEFT", 0, -30)
@@ -2764,19 +2904,19 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     local missingHolder = Components.TextInput(sectionsFrame, {
         label = "Text:",
         value = editingBuff and editingBuff.missingText and editingBuff.missingText:gsub("\n", "\\n") or "",
-        width = 140,
+        width = 250,
         labelWidth = 50,
     })
     missingHolder:SetPoint("TOPLEFT", 0, -54)
     missingBox = missingHolder.editBox
 
     local missingHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    missingHint:SetPoint("TOPLEFT", 0, -74)
+    missingHint:SetPoint("LEFT", missingHolder, "RIGHT", 5, 0)
     missingHint:SetText("(use \\n for line break)")
 
-    -- Left column: Restrictions section
-    CreateSeparator(sectionsFrame, -90, LEFT_COL_WIDTH)
-    CreateSectionHeader(sectionsFrame, "RESTRICTIONS", 0, -99)
+    -- Conditions section (merges restrictions, visibility, advanced)
+    CreateSeparator(sectionsFrame, -76)
+    CreateSectionHeader(sectionsFrame, "CONDITIONS", 0, -85)
 
     local classOptions = {
         { value = nil, label = "Any" },
@@ -2812,9 +2952,10 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             options = specOptions,
             selected = selectedSpecId,
             width = 140,
+            labelWidth = 45,
             onChange = function() end,
         })
-        specDropdownHolder:SetPoint("TOPLEFT", 0, -144)
+        specDropdownHolder:SetPoint("TOPLEFT", 210, -132)
     end
 
     classDropdownHolder = Components.Dropdown(sectionsFrame, {
@@ -2822,21 +2963,18 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         options = classOptions,
         selected = editingBuff and editingBuff.class or nil,
         width = 140,
+        labelWidth = 45,
         maxItems = 10,
         onChange = function(value)
             CreateSpecDropdown(value, nil)
         end,
     }, "BuffRemindersCustomClassDropdown")
-    classDropdownHolder:SetPoint("TOPLEFT", 0, -120)
+    classDropdownHolder:SetPoint("TOPLEFT", 0, -132)
 
     -- Initialize spec dropdown for editing existing buff
     if editingBuff and editingBuff.class then
         CreateSpecDropdown(editingBuff.class, editingBuff.requireSpecId)
     end
-
-    -- Right column: Visibility section
-    CreateSeparator(sectionsFrame, 0, LEFT_COL_WIDTH)
-    CreateSectionHeader(sectionsFrame, "VISIBILITY", RIGHT_COL_X, -9)
 
     showIconToggle = Components.Toggle(sectionsFrame, {
         label = editingBuff and editingBuff.showWhenPresent and "When active" or "When missing",
@@ -2849,18 +2987,33 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             end
         end,
     })
-    showIconToggle:SetPoint("TOPLEFT", RIGHT_COL_X, -30)
+    showIconToggle:SetPoint("TOPLEFT", 0, -106)
 
     requireSpellKnownToggle = Components.Toggle(sectionsFrame, {
         label = "Only if spell known",
         checked = editingBuff and editingBuff.requireSpellKnown or false,
         onChange = function() end,
     })
-    requireSpellKnownToggle:SetPoint("TOPLEFT", RIGHT_COL_X, -52)
+    requireSpellKnownToggle:SetPoint("TOPLEFT", 210, -106)
 
-    -- Advanced section (full width)
-    CreateSeparator(sectionsFrame, -180)
-    CreateSectionHeader(sectionsFrame, "ADVANCED", 0, -189)
+    -- Require item (item gate)
+    local requireItemLabel = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    requireItemLabel:SetPoint("TOPLEFT", 0, -166)
+    requireItemLabel:SetText("Require item:")
+
+    requireItemEditBox = CreateFrame("EditBox", nil, sectionsFrame)
+    requireItemEditBox:SetFontObject("GameFontHighlightSmall")
+    requireItemEditBox:SetAutoFocus(false)
+    local requireItemContainer = StyleEditBox(requireItemEditBox)
+    requireItemContainer:SetSize(70, 20)
+    requireItemContainer:SetPoint("LEFT", requireItemLabel, "RIGHT", 5, 0)
+    if editingBuff and editingBuff.requireItemID then
+        requireItemEditBox:SetText(tostring(editingBuff.requireItemID))
+    end
+
+    local requireItemHint = sectionsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    requireItemHint:SetPoint("LEFT", requireItemContainer, "RIGHT", 5, 0)
+    requireItemHint:SetText("(hide if not owned)")
 
     local glowModeOptions = {
         { value = "whenGlowing", label = "Detect when glowing" },
@@ -2879,11 +3032,11 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         },
         onChange = function() end,
     })
-    glowModeDropdown:SetPoint("TOPLEFT", 0, -210)
+    glowModeDropdown:SetPoint("TOPLEFT", 0, -192)
 
     -- Click action section
-    CreateSeparator(sectionsFrame, -248)
-    CreateSectionHeader(sectionsFrame, "CLICK ACTION", 0, -257)
+    CreateSeparator(sectionsFrame, -224)
+    CreateSectionHeader(sectionsFrame, "CLICK ACTION", 0, -233)
 
     -- Determine existing action type
     local existingActionType = "none"
@@ -2900,7 +3053,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
     -- Container for the conditional input (spell/item Lookup or macro text)
     actionInputHolder = CreateFrame("Frame", nil, sectionsFrame)
     actionInputHolder:SetSize(MODAL_WIDTH - 40, 26)
-    actionInputHolder:SetPoint("TOPLEFT", 0, -302)
+    actionInputHolder:SetPoint("TOPLEFT", 0, -284)
 
     -- Spell ID input with Lookup
     castSpellEditBox = CreateFrame("EditBox", nil, actionInputHolder)
@@ -3069,7 +3222,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             UpdateActionInputVisibility(value)
         end,
     })
-    actionTypeDropdown:SetPoint("TOPLEFT", 0, -278)
+    actionTypeDropdown:SetPoint("TOPLEFT", 0, -254)
 
     -- Initialize visibility for the current action type
     UpdateActionInputVisibility(existingActionType)
@@ -3159,6 +3312,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
             castSpellID = castSpellIDValue,
             castItemID = castItemIDValue,
             castMacro = castMacroValue,
+            requireItemID = tonumber(strtrim(requireItemEditBox:GetText())) or nil,
         }
 
         BuffRemindersDB.customBuffs[key] = customBuff

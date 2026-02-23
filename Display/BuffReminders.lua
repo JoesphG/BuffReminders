@@ -28,6 +28,8 @@ local addonName, BR = ...
 ---@field consumableRebuffColor? number[]
 ---@field consumableDisplayMode? "icon_only"|"sub_icons"|"expanded"
 ---@field petDisplayMode? "generic"|"expanded"
+---@field petLabels? boolean
+---@field petLabelScale? number
 
 ---@class CategorySetting
 ---@field position CategoryPosition
@@ -98,6 +100,10 @@ local addonName, BR = ...
 ---@field isExtraFrame? boolean
 ---@field mainFrame? BuffFrame
 ---@field _br_pet_spell? string             -- Localized spell name for pet click-to-cast
+---@field _br_pet_label_key? string        -- Cache key for pet label updates
+---@field _br_pet_name_text? FontString    -- Pet name label below icon
+---@field _br_pet_family_text? FontString  -- Pet spec label below name
+---@field _br_pet_extra_text? FontString   -- Spirit Beast label below spec
 ---@field qualityOverlay? FontString         -- Quality rank text (R1/R2/R3) for consumable frames
 ---@field _cachedItems? table|false         -- Per-cycle cache for GetConsumableActionItems result
 
@@ -240,15 +246,13 @@ local defaults = {
     readyCheckDuration = 15, -- seconds
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
     showLoginMessages = true,
-    targeting = {
+    jgTargeting = {
         enableStickyTargeting = true,
-    },
-    earthShieldOverride = {
         showPlayerIcon = true,
         showTargetIcon = true,
         disableTargetWhenSolo = true,
+        stickyTargets = {},
     },
-    stickyTargets = {},
 
     -- Global defaults (inherited by categories unless overridden)
     ---@type DefaultSettings
@@ -274,6 +278,13 @@ local defaults = {
         showConsumablesWithoutItems = false,
         consumableDisplayMode = "sub_icons",
         petDisplayMode = "generic", -- "generic" or "expanded"
+        petLabels = true,
+        petLabelClasses = {
+            HUNTER = true,
+            WARLOCK = true,
+            DEATHKNIGHT = true,
+            MAGE = true,
+        },
     },
 
     ---@type CategoryVisibility
@@ -663,8 +674,18 @@ end
 
 for catName, category in pairs(BUFF_TABLES) do
     for _, buff in ipairs(category) do
-        -- Skip if: has enchantID, customCheck, readyCheckOnly, or glowMode disabled (custom buffs only)
-        if not buff.enchantID and not buff.customCheck and not buff.readyCheckOnly and buff.glowMode ~= "disabled" then
+        -- Skip if: has enchantID, customCheck, or glowMode disabled (custom buffs only)
+        -- readyCheckOnly buffs are skipped unless the user overrode them to always-show
+        local skipReadyCheck = buff.readyCheckOnly
+        if skipReadyCheck then
+            local db = BuffRemindersDB
+            local overrides = db and db.readyCheckOnlyOverrides
+            local overrideKey = buff.groupId or buff.key
+            if overrides and overrides[overrideKey] == false then
+                skipReadyCheck = false
+            end
+        end
+        if not buff.enchantID and not buff.customCheck and not skipReadyCheck and buff.glowMode ~= "disabled" then
             RegisterGlowBuff(buff, catName)
         end
     end
@@ -1211,8 +1232,6 @@ local function GenerateTestEntries()
                 entry.sortOrder = i
                 entry.visible = true
 
-                local noGlow = buff.noGlow
-
                 if category == "raid" then
                     if glowEnabled and not expiringShown then
                         entry.displayType = "expiring"
@@ -1242,10 +1261,10 @@ local function GenerateTestEntries()
                     entry.displayType = "missing"
                     entry.missingText = buff.missingText
                     entry.iconByRole = buff.iconByRole
-                    entry.shouldGlow = glowWhenMissing and not noGlow
+                    entry.shouldGlow = glowWhenMissing
 
                     -- Show first buff as expiring to preview expiration glow
-                    if glowEnabled and not noGlow and not expiringShown then
+                    if glowEnabled and not buff.noExpirationGlow and not expiringShown then
                         entry.displayType = "expiring"
                         entry.countText = FormatRemainingTime(testModeData.fakeRemaining)
                         entry.shouldGlow = true
@@ -1586,11 +1605,22 @@ end
 ---@param entry BuffStateEntry
 ---@param frameList table[] List to append extra frames to (for positioning)
 ---@param parentFrame Frame Parent for extra frames
+local function ClearConsumableDynamicDisplay(frame)
+    BR.SecureButtons.UpdateConsumableButtons(frame, nil)
+    if frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
+    end
+end
+
 local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
     if entry.displayType ~= "missing" or entry.isEating then
+        ClearConsumableDynamicDisplay(frame)
         return
     end
     if not BUFF_KEY_TO_CATEGORY[frame.key] or not frame:IsShown() then
+        ClearConsumableDynamicDisplay(frame)
         return
     end
 
@@ -1600,14 +1630,23 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
         items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
         frame._cachedItems = items
     end
+    -- Hide leftover extra frames (re-shown below if still in "expanded" mode)
+    if frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
+    end
+
     if displayMode == "sub_icons" then
         local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.consumable
         local clickable = cs and cs.clickable == true
-        BR.SecureButtons.UpdateConsumableButtons(frame, items, clickable)
+        -- Skip first item (already shown as main icon)
+        BR.SecureButtons.UpdateConsumableButtons(frame, items, clickable, 2)
     else
         -- Not sub_icons: hide any leftover sub-icon buttons
         BR.SecureButtons.UpdateConsumableButtons(frame, nil)
         if displayMode == "expanded" and items and #items > 1 then
+            local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
             for i = 2, #items do
                 local extra = GetOrCreateExtraFrame(frame, i - 1)
                 extra:SetParent(parentFrame)
@@ -1620,9 +1659,89 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
                 extra.stackCount:Show()
                 extra.count:Hide()
                 extra:Show()
+                SetExpirationGlow(extra, entry.shouldGlow, entry.category, cachedGlow)
                 frameList[#frameList + 1] = extra
             end
         end
+    end
+end
+
+---Show or hide pet name/family labels below a frame.
+---Skips redundant work if the action and scale haven't changed.
+---@param frame BuffFrame
+---@param petAction PetAction?
+local function UpdatePetLabels(frame, petAction)
+    local showLabels = (BuffRemindersDB.defaults or {}).petLabels ~= false
+    local petClassVis = (BuffRemindersDB.defaults or {}).petLabelClasses
+    local classLabelsOff = playerClass and petClassVis and petClassVis[playerClass] == false
+    if not petAction or not showLabels or classLabelsOff then
+        if frame._br_pet_label_key then
+            frame._br_pet_label_key = nil
+            if frame._br_pet_name_text then
+                frame._br_pet_name_text:Hide()
+            end
+            if frame._br_pet_family_text then
+                frame._br_pet_family_text:Hide()
+            end
+            if frame._br_pet_extra_text then
+                frame._br_pet_extra_text:Hide()
+            end
+        end
+        return
+    end
+
+    -- Early out if nothing changed since last call
+    local scale = (BuffRemindersDB.defaults or {}).petLabelScale or 100
+    local cacheKey = petAction.key
+        .. ":"
+        .. (petAction.label or "")
+        .. ":"
+        .. (petAction.petFamily or "")
+        .. ":"
+        .. scale
+    if frame._br_pet_label_key == cacheKey then
+        return
+    end
+    frame._br_pet_label_key = cacheKey
+
+    if not frame._br_pet_name_text then
+        frame._br_pet_name_text = frame:CreateFontString(nil, "OVERLAY")
+        frame._br_pet_family_text = frame:CreateFontString(nil, "OVERLAY")
+        frame._br_pet_extra_text = frame:CreateFontString(nil, "OVERLAY")
+    end
+
+    local ratio = scale / 100
+    local nameSize = math.max(7, math.floor(frame:GetWidth() * 0.18 * ratio))
+    local familySize = math.max(7, math.floor(nameSize * 0.85))
+    frame._br_pet_name_text:SetFont(fontPath, nameSize, "OUTLINE")
+    frame._br_pet_name_text:ClearAllPoints()
+    frame._br_pet_name_text:SetPoint("TOP", frame, "BOTTOM", 0, -2)
+    frame._br_pet_name_text:SetText(petAction.label or "")
+    frame._br_pet_name_text:SetTextColor(1, 1, 1)
+    frame._br_pet_name_text:Show()
+
+    local family = petAction.petFamily
+    if family and family ~= "" then
+        frame._br_pet_family_text:SetFont(fontPath, familySize, "OUTLINE")
+        frame._br_pet_family_text:ClearAllPoints()
+        frame._br_pet_family_text:SetPoint("TOP", frame._br_pet_name_text, "BOTTOM", 0, -1)
+        frame._br_pet_family_text:SetText(family)
+        frame._br_pet_family_text:SetTextColor(1, 1, 1)
+        frame._br_pet_family_text:Show()
+    else
+        frame._br_pet_family_text:Hide()
+    end
+
+    if petAction.petSpiritBeast then
+        local anchor = (family and family ~= "") and frame._br_pet_family_text or frame._br_pet_name_text
+        frame._br_pet_extra_text:SetFont(fontPath, familySize, "OUTLINE")
+        frame._br_pet_extra_text:ClearAllPoints()
+        frame._br_pet_extra_text:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
+        frame._br_pet_extra_text:SetText("Spirit Beast")
+        frame._br_pet_extra_text:SetTextColor(1, 1, 1)
+        frame._br_pet_extra_text:Show()
+    else
+        frame._br_pet_extra_text:Hide()
     end
 end
 
@@ -1635,7 +1754,15 @@ end
 local function ExpandPetActions(frame, entry, frameList)
     if not entry.petActions or #entry.petActions == 0 or not frame:IsShown() then
         frame._br_pet_spell = nil
+        UpdatePetLabels(frame, nil)
         return
+    end
+
+    -- Hide all extras first (handles shrinking action count cleanly)
+    if frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
     end
 
     -- Override main frame with first action
@@ -1643,8 +1770,10 @@ local function ExpandPetActions(frame, entry, frameList)
     frame.icon:SetTexture(first.icon)
     frame.count:Hide()
     frame._br_pet_spell = first.spellName
+    UpdatePetLabels(frame, first)
 
     -- Extra frames for remaining actions
+    local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
     for i = 2, #entry.petActions do
         local action = entry.petActions[i]
         local extra = GetOrCreateExtraFrame(frame, i - 1)
@@ -1654,7 +1783,9 @@ local function ExpandPetActions(frame, entry, frameList)
         extra.count:Hide()
         extra.stackCount:Hide()
         extra._br_pet_spell = action.spellName
+        UpdatePetLabels(extra, action)
         extra:Show()
+        SetExpirationGlow(extra, entry.shouldGlow, entry.category, cachedGlow)
         if frameList then
             frameList[#frameList + 1] = extra
         end
@@ -1674,15 +1805,21 @@ local function ApplyPetDisplayMode(frame, entry, frameList)
         ExpandPetActions(frame, entry, frameList)
     else
         -- Generic mode: restore original icon, use preferred action for click-to-cast
-        local texture = GetBuffTexture(frame.spellIDs)
+        local displayIcon = frame.buffDef and frame.buffDef.displayIcon
+        if type(displayIcon) == "table" then
+            displayIcon = displayIcon[1]
+        end
+        local texture = displayIcon or GetBuffTexture(frame.spellIDs)
         if texture then
             frame.icon:SetTexture(texture)
         end
         local gi = entry.petActions.genericIndex or 1
         frame._br_pet_spell = entry.petActions[gi] and entry.petActions[gi].spellName
+        UpdatePetLabels(frame, entry.petActions[gi])
         if frame.extraFrames then
             for _, extra in ipairs(frame.extraFrames) do
                 extra:Hide()
+                UpdatePetLabels(extra, nil)
             end
         end
     end
@@ -1863,9 +2000,11 @@ UpdateDisplay = function()
             if frame then
                 HideFrame(frame)
                 frame._cachedItems = nil
+                UpdatePetLabels(frame, nil)
                 if frame.extraFrames then
                     for _, extra in ipairs(frame.extraFrames) do
                         extra:Hide()
+                        UpdatePetLabels(extra, nil)
                     end
                 end
             end
@@ -2798,7 +2937,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                     end
                 end
             end,
-            -- [17] Enable click-to-cast for targeted buffs by default
+            -- [17] Enable targeted click-cast and migrate ES targeting keys to jgTargeting.
             [17] = function()
                 if not db.categorySettings then
                     db.categorySettings = {}
@@ -2809,6 +2948,30 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
                 db.categorySettings.targeted.clickable = true
                 if db.categorySettings.targeted.clickableHighlight == nil then
                     db.categorySettings.targeted.clickableHighlight = true
+                end
+
+                if not db.jgTargeting then
+                    db.jgTargeting = {}
+                end
+                local t = db.jgTargeting
+                if t.enableStickyTargeting == nil and db.targeting and db.targeting.enableStickyTargeting ~= nil then
+                    t.enableStickyTargeting = db.targeting.enableStickyTargeting
+                end
+                if t.showPlayerIcon == nil and db.earthShieldOverride and db.earthShieldOverride.showPlayerIcon ~= nil then
+                    t.showPlayerIcon = db.earthShieldOverride.showPlayerIcon
+                end
+                if t.showTargetIcon == nil and db.earthShieldOverride and db.earthShieldOverride.showTargetIcon ~= nil then
+                    t.showTargetIcon = db.earthShieldOverride.showTargetIcon
+                end
+                if
+                    t.disableTargetWhenSolo == nil
+                    and db.earthShieldOverride
+                    and db.earthShieldOverride.disableTargetWhenSolo ~= nil
+                then
+                    t.disableTargetWhenSolo = db.earthShieldOverride.disableTargetWhenSolo
+                end
+                if t.stickyTargets == nil and db.stickyTargets ~= nil then
+                    t.stickyTargets = db.stickyTargets
                 end
             end,
         }
@@ -3049,8 +3212,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
         BR.BuffState.InvalidateSpellCache()
         BR.PetHelpers.InvalidatePetActions()
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+        BR.BuffState.InvalidateItemCache()
         SetDirty()
     elseif event == "BAG_UPDATE_DELAYED" then
+        BR.BuffState.InvalidateItemCache()
         BR.SecureButtons.InvalidateConsumableCache()
         SetDirty()
         BR.SecureButtons.UpdateActionButtons("consumable")

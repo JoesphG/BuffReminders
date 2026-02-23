@@ -91,6 +91,7 @@ read_globals = {
 	"CallbackRegistryMixin",
 
 	-- WoW UI globals
+	"RAID_CLASS_COLORS",
 	"ColorPickerFrame",
 	"DynamicResizeButton_Resize",
 	"GameTooltip",

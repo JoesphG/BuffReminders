@@ -29,7 +29,7 @@ local _, BR = ...
 ---@field excludeSpellID? number
 ---@field displayIcon? number
 ---@field infoTooltip? string
----@field noGlow? boolean
+---@field noExpirationGlow? boolean
 ---@field readyCheckOnly? boolean Only show during ready checks
 ---@field castOnOthers? boolean Buff exists on the target, not the caster (e.g., Soulstone)
 
@@ -100,6 +100,7 @@ local _, BR = ...
 ---@field castSpellID? number       -- Spell to cast on click (separate from tracked aura)
 ---@field castItemID? number        -- Item to use on click
 ---@field castMacro? string         -- Raw macro text for click action
+---@field requireItemID? number    -- Only show if this item is equipped or in bags
 
 ---Check if the player's pet is on passive stance
 ---@return boolean? true if pet exists and is on passive, nil otherwise
@@ -181,8 +182,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSTONE",
             readyCheckOnly = true,
             castOnOthers = true,
-            infoTooltip = "Ready Check Only|This buff is only shown during ready checks.\nClick-to-cast is not available for this buff.",
-            noGlow = true,
+            noExpirationGlow = true,
         },
     },
     ---@type TargetedBuff[]
@@ -685,7 +685,6 @@ BR.BUFF_TABLES = {
             groupId = "healthstone",
             displayIcon = 538745, -- Healthstone icon
             readyCheckOnly = true,
-            infoTooltip = "Ready Check Only|This is only shown during ready checks.",
         },
     },
 }

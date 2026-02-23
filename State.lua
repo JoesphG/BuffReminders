@@ -91,6 +91,10 @@ local cachedSpecId = nil
 -- Off-hand weapon cache (invalidated on equipment/spec change)
 local cachedHasOffHandWeapon = nil
 
+-- Item ownership cache (invalidated on BAG_UPDATE_DELAYED, PLAYER_EQUIPMENT_CHANGED)
+---@type table<number, boolean>
+local cachedItemOwnership = {}
+
 -- Weapon enchant info for current refresh cycle (set once per BuffState.Refresh())
 local currentWeaponEnchants = {
     hasMainHand = false,
@@ -178,6 +182,31 @@ local function IsPlayerSpellCached(spellID)
     local knows = IsPlayerSpell(spellID)
     cachedSpellKnowledge[spellID] = knows
     return knows
+end
+
+---Check if player has an item equipped or in bags (cached)
+---@param itemID number
+---@return boolean
+local function HasItemInBagsOrEquipped(itemID)
+    if cachedItemOwnership[itemID] ~= nil then
+        return cachedItemOwnership[itemID]
+    end
+    local owned = false
+    -- Check bags first via C_Item.GetItemCount
+    local ok, count = pcall(C_Item.GetItemCount, itemID)
+    if ok and count and count > 0 then
+        owned = true
+    else
+        -- Check equipment slots 1-19
+        for slot = 1, 19 do
+            if GetInventoryItemID("player", slot) == itemID then
+                owned = true
+                break
+            end
+        end
+    end
+    cachedItemOwnership[itemID] = owned
+    return owned
 end
 
 -- ============================================================================
@@ -560,14 +589,13 @@ local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, 
         end
     end
 
-    if buffKey and BuffRemindersDB and BuffRemindersDB.targeting and BuffRemindersDB.targeting.enableStickyTargeting then
-        if not BuffRemindersDB.stickyTargets then
-            BuffRemindersDB.stickyTargets = {}
-        end
+    local jgTargeting = BuffRemindersDB and (BuffRemindersDB.jgTargeting or BuffRemindersDB.targeting)
+    if buffKey and jgTargeting and jgTargeting.enableStickyTargeting then
+        jgTargeting.stickyTargets = jgTargeting.stickyTargets or {}
         if stickyUnitName then
-            BuffRemindersDB.stickyTargets[buffKey] = stickyUnitName
+            jgTargeting.stickyTargets[buffKey] = stickyUnitName
         elseif found then
-            BuffRemindersDB.stickyTargets[buffKey] = nil
+            jgTargeting.stickyTargets[buffKey] = nil
         end
     end
 
@@ -762,35 +790,33 @@ end
 ---Ensure targeting-related DB tables/flags exist.
 ---@param db table
 local function EnsureTargetingDB(db)
-    if not db.targeting then
-        db.targeting = {}
+    local t = db.jgTargeting or db.targeting
+    if not t then
+        t = {}
+        db.jgTargeting = t
     end
-    if db.targeting.enableStickyTargeting == nil then
-        db.targeting.enableStickyTargeting = true
+    if t.enableStickyTargeting == nil then
+        t.enableStickyTargeting = true
     end
-
-    if not db.earthShieldOverride then
-        db.earthShieldOverride = {}
+    if t.showPlayerIcon == nil then
+        -- Compatibility with legacy table shape
+        t.showPlayerIcon = not db.earthShieldOverride or db.earthShieldOverride.showPlayerIcon ~= false
     end
-    if db.earthShieldOverride.showPlayerIcon == nil then
-        db.earthShieldOverride.showPlayerIcon = true
+    if t.showTargetIcon == nil then
+        t.showTargetIcon = not db.earthShieldOverride or db.earthShieldOverride.showTargetIcon ~= false
     end
-    if db.earthShieldOverride.showTargetIcon == nil then
-        db.earthShieldOverride.showTargetIcon = true
+    if t.disableTargetWhenSolo == nil then
+        t.disableTargetWhenSolo = not db.earthShieldOverride or db.earthShieldOverride.disableTargetWhenSolo ~= false
     end
-    if db.earthShieldOverride.disableTargetWhenSolo == nil then
-        db.earthShieldOverride.disableTargetWhenSolo = true
-    end
-
-    if not db.stickyTargets then
-        db.stickyTargets = {}
-    end
+    t.stickyTargets = t.stickyTargets or db.stickyTargets or {}
+    db.jgTargeting = t
 end
 
 ---Remove sticky targets that are no longer valid group members.
 ---@param db table
 local function PruneStickyTargets(db)
-    if not db.stickyTargets then
+    local t = db.jgTargeting
+    if not t or not t.stickyTargets then
         return
     end
     local validNames = {}
@@ -802,9 +828,9 @@ local function PruneStickyTargets(db)
             end
         end
     end
-    for buffKey, unitName in pairs(db.stickyTargets) do
+    for buffKey, unitName in pairs(t.stickyTargets) do
         if not validNames[unitName] then
-            db.stickyTargets[buffKey] = nil
+            t.stickyTargets[buffKey] = nil
         end
     end
 end
@@ -814,13 +840,14 @@ end
 ---@return string?
 local function GetStickyTarget(buffKey)
     local db = BuffRemindersDB
-    if not db or not db.targeting or not db.targeting.enableStickyTargeting then
+    local t = db and (db.jgTargeting or db.targeting)
+    if not t or not t.enableStickyTargeting then
         return nil
     end
-    if not db.stickyTargets then
+    if not t.stickyTargets then
         return nil
     end
-    local unitName = db.stickyTargets[buffKey]
+    local unitName = t.stickyTargets[buffKey]
     if type(unitName) ~= "string" or unitName == "" then
         return nil
     end
@@ -947,9 +974,13 @@ local function PassesPreChecks(buff, presentClasses, db)
         return false
     end
 
-    -- Ready check only
+    -- Ready check only (can be overridden per-buff via readyCheckOnlyOverrides)
     if buff.readyCheckOnly and not inReadyCheck then
-        return false
+        local overrides = db.readyCheckOnlyOverrides
+        local settingKey = buff.groupId or buff.key
+        if not overrides or overrides[settingKey] ~= false then
+            return false
+        end
     end
 
     -- Class filtering
@@ -1050,9 +1081,11 @@ function BuffState.Refresh()
         return
     end
 
+    EnsureTargetingDB(db)
+    local jgTargeting = db.jgTargeting
+
     -- Invalidate off-hand weapon cache each refresh cycle (cheap lazy re-check)
     cachedHasOffHandWeapon = nil
-    EnsureTargetingDB(db)
 
     -- Reset all entries to not visible
     for _, entry in pairs(BuffState.entries) do
@@ -1127,15 +1160,19 @@ function BuffState.Refresh()
             HasCasterForBuff(buff.class, buff.levelRequired),
             buff.castOnOthers
         )
-        local showBuff = presenceVisible and (not buff.readyCheckOnly or inReadyCheck) and scope.show
-        local noGlow = buff.noGlow
-
+        local readyCheckOk = not buff.readyCheckOnly or inReadyCheck
+        if not readyCheckOk then
+            local overrides = db.readyCheckOnlyOverrides
+            local overrideKey = buff.groupId or buff.key
+            readyCheckOk = overrides and overrides[overrideKey] == false
+        end
+        local showBuff = presenceVisible and readyCheckOk and scope.show
         if IsBuffEnabled(buff.key) and showBuff then
             local hasBuff, minRemaining = HasPresenceBuff(buff.spellID, scope.playerOnly)
 
             if not hasBuff then
-                SetEntryMissing(entry, buff.missingText, presGlowMissing and not noGlow)
-            elseif presGlow and not noGlow then
+                SetEntryMissing(entry, buff.missingText, presGlowMissing)
+            elseif presGlow and not buff.noExpirationGlow then
                 TrySetEntryExpiring(entry, minRemaining, presGlowThreshold)
             end
         end
@@ -1150,11 +1187,11 @@ function BuffState.Refresh()
         local shouldProcess = IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db)
 
         if shouldProcess and buff.key == "earthShieldPlayer" then
-            shouldProcess = db.earthShieldOverride.showPlayerIcon ~= false
+            shouldProcess = jgTargeting.showPlayerIcon ~= false
         end
         if shouldProcess and buff.key == "earthShieldOthers" then
-            shouldProcess = db.earthShieldOverride.showTargetIcon ~= false
-                and not (db.earthShieldOverride.disableTargetWhenSolo and GetNumGroupMembers() == 0)
+            shouldProcess = jgTargeting.showTargetIcon ~= false
+                and not (jgTargeting.disableTargetWhenSolo and GetNumGroupMembers() == 0)
         end
 
         if shouldProcess then
@@ -1335,6 +1372,13 @@ function BuffState.Refresh()
         end
 
         if shouldProcess then
+            local gateItemID = buff.requireItemID or buff.castItemID
+            if gateItemID and not HasItemInBagsOrEquipped(gateItemID) then
+                shouldProcess = false
+            end
+        end
+
+        if shouldProcess then
             local shouldShow = ShouldShowSelfBuff(
                 buff.spellID,
                 buff.class,
@@ -1451,6 +1495,11 @@ function BuffState.InvalidateOffHandCache()
     cachedHasOffHandWeapon = nil
 end
 
+---Invalidate item ownership cache (call on BAG_UPDATE_DELAYED, PLAYER_EQUIPMENT_CHANGED)
+function BuffState.InvalidateItemCache()
+    cachedItemOwnership = {}
+end
+
 -- Export utility functions that display layer still needs
 BR.StateHelpers = {
     GetPlayerSpecId = GetPlayerSpecId,
@@ -1462,6 +1511,7 @@ BR.StateHelpers = {
     GetBuffSettingKey = GetBuffSettingKey,
     IsBuffEnabled = IsBuffEnabled,
     GetStickyTarget = GetStickyTarget,
+    IsValidGroupMember = IsValidGroupMember,
 }
 
 -- Export the module
