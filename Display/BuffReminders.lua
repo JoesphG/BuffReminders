@@ -1660,7 +1660,13 @@ local function UpdatePetLabels(frame, petAction)
 
     -- Early out if nothing changed since last call
     local scale = (BuffRemindersDB.defaults or {}).petLabelScale or 100
-    local cacheKey = petAction.key .. ":" .. scale
+    local cacheKey = petAction.key
+        .. ":"
+        .. (petAction.label or "")
+        .. ":"
+        .. (petAction.petFamily or "")
+        .. ":"
+        .. scale
     if frame._br_pet_label_key == cacheKey then
         return
     end
