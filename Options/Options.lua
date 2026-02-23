@@ -2308,6 +2308,7 @@ ShowGlowDemo = function()
 
     local demoPanel = CreatePanel("BuffRemindersGlowDemo", numTypes * (ICON_SIZE + SPACING) + SPACING, ICON_SIZE + 70, {
         strata = "TOOLTIP",
+        modal = true,
     })
 
     local demoTitle = demoPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2443,7 +2444,7 @@ ShowCustomBuffModal = function(existingKey, refreshPanelCallback)
         bgColor = { 0.1, 0.1, 0.1, 0.98 },
         borderColor = { 0.4, 0.4, 0.4, 1 },
         level = 200,
-        escClose = true,
+        modal = true,
     })
 
     local spellRows, nameBox, missingBox

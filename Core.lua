@@ -554,7 +554,7 @@ end
 ---@param name string? Frame name (nil for anonymous)
 ---@param width number
 ---@param height number
----@param options? {bgColor?: table, borderColor?: table, strata?: string, level?: number, escClose?: boolean}
+---@param options? {bgColor?: table, borderColor?: table, strata?: string, level?: number, escClose?: boolean, modal?: boolean}
 ---@return table
 function BR.CreatePanel(name, width, height, options)
     options = options or {}
@@ -580,7 +580,19 @@ function BR.CreatePanel(name, width, height, options)
     if options.level then
         panel:SetFrameLevel(options.level)
     end
-    if options.escClose and name then
+    if options.modal then
+        -- Modal panels handle ESC via keyboard input so they close themselves
+        -- without also closing parent panels (unlike UISpecialFrames which closes all)
+        panel:EnableKeyboard(true)
+        panel:SetScript("OnKeyDown", function(self, key)
+            if key == "ESCAPE" then
+                self:SetPropagateKeyboardInput(false)
+                self:Hide()
+            else
+                self:SetPropagateKeyboardInput(true)
+            end
+        end)
+    elseif options.escClose and name then
         tinsert(UISpecialFrames, name)
     end
     return panel
