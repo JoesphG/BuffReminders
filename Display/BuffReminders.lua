@@ -1739,7 +1739,11 @@ local function ApplyPetDisplayMode(frame, entry, frameList)
         ExpandPetActions(frame, entry, frameList)
     else
         -- Generic mode: restore original icon, use preferred action for click-to-cast
-        local texture = GetBuffTexture(frame.spellIDs)
+        local displayIcon = frame.buffDef and frame.buffDef.displayIcon
+        if type(displayIcon) == "table" then
+            displayIcon = displayIcon[1]
+        end
+        local texture = displayIcon or GetBuffTexture(frame.spellIDs)
         if texture then
             frame.icon:SetTexture(texture)
         end
