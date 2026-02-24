@@ -923,6 +923,22 @@ local function UpdateActionButtons(category)
                             end
                         end
                     end
+                elseif frame.key == "petPassive" then
+                    -- Pet passive: click to switch pet to Assist stance
+                    if not frame.clickOverlay then
+                        CreateClickOverlay(frame)
+                    end
+                    local overlay = frame.clickOverlay
+                    overlay._br_has_action = true
+                    overlay.itemID = nil
+                    overlay._br_clickMacroFn = nil
+                    overlay._br_clickMacroSpellID = nil
+                    overlay:SetAttribute("type", "macro")
+                    overlay:SetAttribute("macrotext", "/petassist")
+                    overlay:EnableMouse(true)
+                    if overlay.highlight then
+                        overlay.highlight:SetShown(frameHighlight)
+                    end
                 else
                     -- Spells / Custom: check castability before creating overlay
                     local castableID
