@@ -115,6 +115,24 @@ local currentValidUnits = {}
 -- True in follower dungeons and delves where NPC companions can receive buffs.
 local includeNPCsInCounting = false
 
+-- Last target cache: runtime-only map of buffKey -> {name, class} for targeted buffs.
+-- When a targeted buff is found on someone, we remember their name so the click macro
+-- can re-target them automatically. Not persisted to SavedVariables.
+---@type table<string, {name: string, class: string}>
+local lastTargets = {}
+
+---Get the last known target for a targeted buff
+---@param buffKey string
+---@return string? name Character name (with realm) of the last known target
+---@return string? class English class token (e.g. "PALADIN")
+local function GetLastTarget(buffKey)
+    local entry = lastTargets[buffKey]
+    if entry then
+        return entry.name, entry.class
+    end
+    return nil, nil
+end
+
 -- Pool of reusable unit entry tables (avoids creating new tables each refresh)
 ---@type {unit: string, class: string, isPlayer: boolean}[]
 local unitEntryPool = {}
@@ -270,6 +288,20 @@ local function BuildValidUnitCache()
                     classMaxLevels[class] = level
                 end
             end
+        end
+    end
+
+    -- Prune last targets: remove entries for players no longer in the group
+    for buffKey, entry in pairs(lastTargets) do
+        local found = false
+        for _, data in ipairs(currentValidUnits) do
+            if GetUnitName(data.unit, true) == entry.name then
+                found = true
+                break
+            end
+        end
+        if not found then
+            lastTargets[buffKey] = nil
         end
     end
 end
@@ -558,16 +590,22 @@ end
 ---@param role? RoleType Only check units with this role
 ---@return boolean
 ---@return number? minRemaining
+---@return string? targetUnit Unit ID of a non-player target with the buff (for last target cache)
 local function IsPlayerBuffActive(spellID, role)
     local minRemaining = nil
+    local targetUnit = nil
     for _, data in ipairs(currentValidUnits) do
         -- Skip NPCs in content where they can't receive player buffs
         if data.isPlayer or includeNPCsInCounting then
             if not role or UnitGroupRolesAssigned(data.unit) == role then
                 local hasBuff, remaining, sourceUnit = UnitHasBuff(data.unit, spellID)
                 if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
+                    -- Track first non-player target for last target cache
+                    if not targetUnit and not UnitIsUnit(data.unit, "player") then
+                        targetUnit = data.unit
+                    end
                     if not remaining then
-                        return true, nil -- no expiration, no need to keep scanning
+                        return true, nil, targetUnit
                     end
                     if not minRemaining or remaining < minRemaining then
                         minRemaining = remaining
@@ -576,16 +614,18 @@ local function IsPlayerBuffActive(spellID, role)
             end
         end
     end
-    return minRemaining ~= nil, minRemaining
+    return minRemaining ~= nil, minRemaining, targetUnit
 end
 
 ---Check if player should cast their targeted buff (returns true if a beneficiary needs it)
 ---@param spellIDs SpellID
 ---@param requiredClass ClassName
 ---@param beneficiaryRole? RoleType
+---@param requireSpecId? number
+---@param buffKey? string Used for last target cache
 ---@return boolean? shouldShow Returns nil if player can't provide this buff
 ---@return number? remainingTime
-local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, requireSpecId)
+local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, requireSpecId, buffKey)
     if playerClass ~= requiredClass then
         return nil
     end
@@ -603,7 +643,29 @@ local function ShouldShowTargetedBuff(spellIDs, requiredClass, beneficiaryRole, 
         return nil
     end
 
-    local isActive, remaining = IsPlayerBuffActive(spellID, beneficiaryRole)
+    local isActive, remaining, targetUnit = IsPlayerBuffActive(spellID, beneficiaryRole)
+
+    -- Update last target cache
+    if buffKey then
+        if targetUnit then
+            local name = GetUnitName(targetUnit, true) -- include realm
+            if name then
+                local _, class = UnitClass(targetUnit)
+                local existing = lastTargets[buffKey]
+                if existing then
+                    existing.name = name
+                    existing.class = class
+                else
+                    lastTargets[buffKey] = { name = name, class = class }
+                end
+            end
+        elseif isActive then
+            -- Buff found but only on player — clear last target
+            lastTargets[buffKey] = nil
+        end
+        -- If not active at all, keep old last target so macro still targets them after it falls off
+    end
+
     return not isActive, remaining
 end
 
@@ -1067,7 +1129,7 @@ function BuffState.Refresh()
 
         if IsBuffEnabled(settingKey) and targetedVisible and PassesPreChecks(buff, nil, db) then
             local shouldShow, remaining =
-                ShouldShowTargetedBuff(buff.spellID, buff.class, buff.beneficiaryRole, buff.requireSpecId)
+                ShouldShowTargetedBuff(buff.spellID, buff.class, buff.beneficiaryRole, buff.requireSpecId, buff.key)
 
             if shouldShow then
                 SetEntryMissing(entry, buff.missingText, targGlowMissing)
@@ -1342,6 +1404,7 @@ BR.StateHelpers = {
     IsCategoryVisibleForContent = IsCategoryVisibleForContent,
     GetBuffSettingKey = GetBuffSettingKey,
     IsBuffEnabled = IsBuffEnabled,
+    GetLastTarget = GetLastTarget,
 }
 
 -- Export the module

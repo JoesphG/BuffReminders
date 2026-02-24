@@ -45,6 +45,7 @@ local _, BR = ...
 ---@field displayIcon? number
 ---@field requireSpecId? number
 ---@field infoTooltip? string
+---@field clickMacro? fun(spellID: number): string
 
 ---@class SelfBuff
 ---@field spellID? SpellID
@@ -115,6 +116,21 @@ local function IsPetOnPassive()
         end
     end
     return nil
+end
+
+---Build a clickMacro function for targeted buffs that remembers the last target (last target re-casting).
+---Macro priority: last target > mouseover > current target > no target (self-cast or error).
+---@param buffKey string The buff's key, used to look up the last target
+---@return fun(spellID: number): string
+local function TargetedClickMacro(buffKey)
+    return function(spellID)
+        local name = C_Spell.GetSpellName(spellID)
+        local lastTarget = BR.StateHelpers and BR.StateHelpers.GetLastTarget(buffKey)
+        if lastTarget then
+            return "/cast [@" .. lastTarget .. ",help,nodead][@mouseover,help,nodead][@target,help,nodead][] " .. name
+        end
+        return "/cast [@mouseover,help,nodead][@target,help,nodead][] " .. name
+    end
 end
 
 ---@type table<string, RaidBuff[]|PresenceBuff[]|TargetedBuff[]|SelfBuff[]|ConsumableBuff[]|CustomBuff[]>
@@ -196,6 +212,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nFAITH",
             groupId = "beacons",
             requireSpecId = 65, -- Holy only
+            clickMacro = TargetedClickMacro("beaconOfFaith"),
         },
         {
             spellID = 53563,
@@ -207,6 +224,7 @@ BR.BUFF_TABLES = {
             requireSpecId = 65, -- Holy only
             excludeSpellID = 200025, -- Hide when Beacon of Virtue is known
             displayIcon = 236247, -- Force original icon (talents replace the texture)
+            clickMacro = TargetedClickMacro("beaconOfLight"),
         },
         {
             spellID = 974,
@@ -215,6 +233,7 @@ BR.BUFF_TABLES = {
             class = "SHAMAN",
             missingText = "NO\nES",
             infoTooltip = "May Show Extra Icon|Until you cast this, you might see both this and the Water/Lightning Shield reminder. I can't tell if you want Earth Shield on yourself, or Earth Shield on an ally + Water/Lightning Shield on yourself.",
+            clickMacro = TargetedClickMacro("earthShieldOthers"),
         },
         {
             spellID = 369459,
@@ -223,6 +242,7 @@ BR.BUFF_TABLES = {
             class = "EVOKER",
             beneficiaryRole = "HEALER",
             missingText = "NO\nSOURCE",
+            clickMacro = TargetedClickMacro("sourceOfMagic"),
         },
         {
             spellID = 360827,
@@ -233,6 +253,7 @@ BR.BUFF_TABLES = {
             missingText = "NO\nSCALES",
             requireSpecId = 1473, -- Augmentation
             requiresSpellID = 360827,
+            clickMacro = TargetedClickMacro("blisteringScales"),
         },
         {
             spellID = 474750,
@@ -240,6 +261,7 @@ BR.BUFF_TABLES = {
             name = "Symbiotic Relationship",
             class = "DRUID",
             missingText = "NO\nLINK",
+            clickMacro = TargetedClickMacro("symbioticRelationship"),
         },
     },
     ---@type SelfBuff[]

@@ -32,7 +32,8 @@ local PetBuffs = BUFF_TABLES.pet
 local Consumables = BUFF_TABLES.consumable
 
 -- Categories that expose the "Click to cast" toggle (custom has per-buff actions instead)
-local CLICKABLE_CATEGORIES = { raid = true, presence = true, self = true, consumable = true, pet = true }
+local CLICKABLE_CATEGORIES =
+    { raid = true, presence = true, targeted = true, self = true, consumable = true, pet = true }
 
 -- Glow module
 local Glow = BR.Glow

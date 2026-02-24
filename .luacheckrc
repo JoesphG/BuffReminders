@@ -45,6 +45,7 @@ read_globals = {
 	"GetPetActionInfo",
 	"GetCursorPosition",
 	"GetNumGroupMembers",
+	"GetUnitName",
 	"GetSpecialization",
 	"GetSpecializationInfo",
 	"GetSpecializationInfoForClassID",

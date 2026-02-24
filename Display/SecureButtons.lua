@@ -96,6 +96,62 @@ local function ResolveCustomClickAction(buff)
 end
 
 -- ============================================================================
+-- LAST TARGET TOOLTIP
+-- ============================================================================
+-- Custom styled tooltip for targeted buffs showing the last known target name.
+
+local lastTargetTooltip
+
+---Show the last target tooltip anchored below the given frame
+---@param anchor table Frame to anchor to
+---@param name string Character name
+---@param class? string English class token
+local function ShowLastTargetTooltip(anchor, name, class)
+    if not lastTargetTooltip then
+        local fontPath = BR.Display.GetFontPath()
+        local tip = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        tip:SetFrameStrata("TOOLTIP")
+        tip:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        tip:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+        tip:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+        tip.name = tip:CreateFontString(nil, "OVERLAY")
+        tip.name:SetFont(fontPath, 13, "OUTLINE")
+        tip.name:SetPoint("CENTER", 0, 0)
+        lastTargetTooltip = tip
+    end
+    local tip = lastTargetTooltip
+    -- Set class-colored name
+    local r, g, b = 1, 1, 1
+    if class then
+        local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+        if c then
+            r, g, b = c.r, c.g, c.b
+        end
+    end
+    tip.name:SetText(name)
+    tip.name:SetTextColor(r, g, b)
+    -- Size to fit text
+    local textWidth = tip.name:GetStringWidth()
+    local textHeight = tip.name:GetStringHeight()
+    tip:SetSize(textWidth + 24, textHeight + 16)
+    -- Anchor below the frame
+    tip:ClearAllPoints()
+    tip:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+    tip:Show()
+end
+
+---Hide the last target tooltip
+local function HideLastTargetTooltip()
+    if lastTargetTooltip then
+        lastTargetTooltip:Hide()
+    end
+end
+
+-- ============================================================================
 -- CLICK-TO-CAST OVERLAY
 -- ============================================================================
 
@@ -144,6 +200,23 @@ local function CreateClickOverlay(frame)
     overlay.highlight:SetAllPoints()
     overlay.highlight:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
     overlay.highlight:SetColorTexture(1, 1, 1, 0.2)
+    -- Tooltip: show last target name for targeted buffs
+    overlay:HookScript("OnEnter", function()
+        if frame.buffCategory ~= "targeted" or not frame.buffDef then
+            return
+        end
+        local name, class = BR.StateHelpers.GetLastTarget(frame.buffDef.key)
+        if not name then
+            return
+        end
+        ShowLastTargetTooltip(overlay, name, class)
+    end)
+    overlay:HookScript("OnLeave", function()
+        HideLastTargetTooltip()
+    end)
+    overlay:HookScript("OnHide", function()
+        HideLastTargetTooltip()
+    end)
     frame.clickOverlay = overlay
 end
 
