@@ -95,6 +95,16 @@ local function ResolveCustomClickAction(buff)
     return nil, nil
 end
 
+---Check whether a custom buff definition has a per-buff click action configured
+---@param def table? Buff definition from the custom buff table
+---@return boolean
+local function HasCustomClickAction(def)
+    if not def then
+        return false
+    end
+    return def.castSpellID ~= nil or def.castItemID ~= nil or (def.castMacro ~= nil and def.castMacro ~= "")
+end
+
 -- ============================================================================
 -- LAST TARGET TOOLTIP
 -- ============================================================================
@@ -594,9 +604,8 @@ local function SyncSecureButtons()
                 and BuffRemindersDB.categorySettings[frame.buffCategory]
             local clickable = cs and cs.clickable == true
             -- Custom buffs with per-buff click actions are individually clickable
-            if not clickable and frame.buffCategory == "custom" and frame.buffDef then
-                local def = frame.buffDef
-                clickable = def.castSpellID or def.castItemID or (def.castMacro and def.castMacro ~= "")
+            if not clickable and frame.buffCategory == "custom" then
+                clickable = HasCustomClickAction(frame.buffDef)
             end
             if frame:IsVisible() then
                 if not clickable or not overlay._br_has_action then
@@ -829,12 +838,9 @@ local function UpdateActionButtons(category)
             -- Custom buffs define click actions per-buff; treat as enabled when an action is set
             local frameEnabled = enabled
             local frameHighlight = showHighlight
-            if not frameEnabled and category == "custom" and frame.buffDef then
-                local def = frame.buffDef
-                if def.castSpellID or def.castItemID or (def.castMacro and def.castMacro ~= "") then
-                    frameEnabled = true
-                    frameHighlight = true
-                end
+            if not frameEnabled and category == "custom" and HasCustomClickAction(frame.buffDef) then
+                frameEnabled = true
+                frameHighlight = true
             end
             if frameEnabled then
                 if category == "consumable" then
@@ -1063,7 +1069,7 @@ local function RefreshOverlaySpells()
         if cat and not seen[cat] then
             seen[cat] = true
             local cs = db.categorySettings and db.categorySettings[cat]
-            if cs and cs.clickable == true then
+            if (cs and cs.clickable == true) or cat == "custom" then
                 UpdateActionButtons(cat)
             end
         end
