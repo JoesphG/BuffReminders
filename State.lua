@@ -110,6 +110,10 @@ local currentWeaponEnchants = {
 ---@type {unit: string, class: string, isPlayer: boolean}[]
 local currentValidUnits = {}
 
+-- Whether NPCs should be included in buff counting for the current refresh cycle.
+-- True in follower dungeons and delves where NPC companions can receive buffs.
+local includeNPCsInCounting = false
+
 -- Pool of reusable unit entry tables (avoids creating new tables each refresh)
 ---@type {unit: string, class: string, isPlayer: boolean}[]
 local unitEntryPool = {}
@@ -219,6 +223,17 @@ end
 local function BuildValidUnitCache()
     RecycleUnitEntries()
     wipe(classMaxLevels)
+
+    -- Determine if NPCs should count for buff tracking this refresh.
+    -- Follower dungeons and delves (scenarios) have NPC companions that can receive buffs.
+    -- Other content (e.g., Legion artifact quests) has allied NPCs that cannot.
+    do
+        -- Default: exclude NPCs from buff counting.
+        -- Only whitelist specific content where NPC companions can receive player buffs.
+        local difficultyID, difficultyName = select(3, GetInstanceInfo())
+        includeNPCsInCounting = difficultyID == 205 -- Follower dungeon
+            or difficultyName == "Delves"
+    end
 
     local inRaid = IsInRaid()
     local groupSize = GetNumGroupMembers()
@@ -481,15 +496,18 @@ local function CountMissingBuff(spellIDs, buffKey, playerOnly)
     end
 
     for _, data in ipairs(currentValidUnits) do
-        -- Check if unit's class benefits from this buff
-        if not beneficiaries or beneficiaries[data.class] then
-            total = total + 1
-            local hasBuff, remaining = UnitHasBuff(data.unit, spellIDs)
-            if not hasBuff then
-                missing = missing + 1
-            elseif remaining then
-                if not minRemaining or remaining < minRemaining then
-                    minRemaining = remaining
+        -- Skip NPCs in content where they can't receive player buffs (e.g., Legion artifact quests)
+        if data.isPlayer or includeNPCsInCounting then
+            -- Check if unit's class benefits from this buff
+            if not beneficiaries or beneficiaries[data.class] then
+                total = total + 1
+                local hasBuff, remaining = UnitHasBuff(data.unit, spellIDs)
+                if not hasBuff then
+                    missing = missing + 1
+                elseif remaining then
+                    if not minRemaining or remaining < minRemaining then
+                        minRemaining = remaining
+                    end
                 end
             end
         end
@@ -514,15 +532,18 @@ local function HasPresenceBuff(spellIDs, playerOnly)
     local found = false
 
     for _, data in ipairs(currentValidUnits) do
-        local hasBuff, remaining = UnitHasBuff(data.unit, spellIDs)
-        if hasBuff then
-            found = true
-            if remaining then
-                if not minRemaining or remaining < minRemaining then
-                    minRemaining = remaining
+        -- Skip NPCs in content where they can't receive player buffs
+        if data.isPlayer or includeNPCsInCounting then
+            local hasBuff, remaining = UnitHasBuff(data.unit, spellIDs)
+            if hasBuff then
+                found = true
+                if remaining then
+                    if not minRemaining or remaining < minRemaining then
+                        minRemaining = remaining
+                    end
+                else
+                    return true, nil -- no expiration, no need to keep scanning
                 end
-            else
-                return true, nil -- no expiration, no need to keep scanning
             end
         end
     end
@@ -539,14 +560,17 @@ end
 local function IsPlayerBuffActive(spellID, role)
     local minRemaining = nil
     for _, data in ipairs(currentValidUnits) do
-        if not role or UnitGroupRolesAssigned(data.unit) == role then
-            local hasBuff, remaining, sourceUnit = UnitHasBuff(data.unit, spellID)
-            if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
-                if not remaining then
-                    return true, nil -- no expiration, no need to keep scanning
-                end
-                if not minRemaining or remaining < minRemaining then
-                    minRemaining = remaining
+        -- Skip NPCs in content where they can't receive player buffs
+        if data.isPlayer or includeNPCsInCounting then
+            if not role or UnitGroupRolesAssigned(data.unit) == role then
+                local hasBuff, remaining, sourceUnit = UnitHasBuff(data.unit, spellID)
+                if hasBuff and sourceUnit and UnitIsUnit(sourceUnit, "player") then
+                    if not remaining then
+                        return true, nil -- no expiration, no need to keep scanning
+                    end
+                    if not minRemaining or remaining < minRemaining then
+                        minRemaining = remaining
+                    end
                 end
             end
         end
