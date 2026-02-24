@@ -30,6 +30,7 @@ local addonName, BR = ...
 ---@field petDisplayMode? "generic"|"expanded"
 ---@field petLabels? boolean
 ---@field petLabelScale? number
+---@field petSpecIconOnHover? boolean
 
 ---@class CategorySetting
 ---@field position CategoryPosition
@@ -100,6 +101,7 @@ local addonName, BR = ...
 ---@field isExtraFrame? boolean
 ---@field mainFrame? BuffFrame
 ---@field _br_pet_spell? string             -- Localized spell name for pet click-to-cast
+---@field _br_pet_spec_icon? number        -- Pet spec ability icon texture for hover swap
 ---@field _br_pet_label_key? string        -- Cache key for pet label updates
 ---@field _br_pet_name_text? FontString    -- Pet name label below icon
 ---@field _br_pet_family_text? FontString  -- Pet spec label below name
@@ -272,6 +274,7 @@ local defaults = {
         consumableDisplayMode = "sub_icons",
         petDisplayMode = "generic", -- "generic" or "expanded"
         petLabels = true,
+        petSpecIconOnHover = true,
         petLabelClasses = {
             HUNTER = true,
             WARLOCK = true,
@@ -1762,6 +1765,7 @@ end
 local function ExpandPetActions(frame, entry, frameList)
     if not entry.petActions or #entry.petActions == 0 or not frame:IsShown() then
         frame._br_pet_spell = nil
+        frame._br_pet_spec_icon = nil
         UpdatePetLabels(frame, nil)
         return
     end
@@ -1778,7 +1782,9 @@ local function ExpandPetActions(frame, entry, frameList)
     frame.icon:SetTexture(first.icon)
     frame.count:Hide()
     frame._br_pet_spell = first.spellName
+    frame._br_pet_spec_icon = first.petSpecIcon
     UpdatePetLabels(frame, first)
+    BR.SecureButtons.ReapplyPetSpecIconIfHovered(frame)
 
     -- Extra frames for remaining actions
     local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
@@ -1791,7 +1797,9 @@ local function ExpandPetActions(frame, entry, frameList)
         extra.count:Hide()
         extra.stackCount:Hide()
         extra._br_pet_spell = action.spellName
+        extra._br_pet_spec_icon = action.petSpecIcon
         UpdatePetLabels(extra, action)
+        BR.SecureButtons.ReapplyPetSpecIconIfHovered(extra)
         extra:Show()
         SetExpirationGlow(extra, entry.shouldGlow, entry.category, cachedGlow)
         if frameList then
@@ -1822,8 +1830,11 @@ local function ApplyPetDisplayMode(frame, entry, frameList)
             frame.icon:SetTexture(texture)
         end
         local gi = entry.petActions.genericIndex or 1
-        frame._br_pet_spell = entry.petActions[gi] and entry.petActions[gi].spellName
-        UpdatePetLabels(frame, entry.petActions[gi])
+        local preferredAction = entry.petActions[gi]
+        frame._br_pet_spell = preferredAction and preferredAction.spellName
+        frame._br_pet_spec_icon = preferredAction and preferredAction.petSpecIcon
+        UpdatePetLabels(frame, preferredAction)
+        BR.SecureButtons.ReapplyPetSpecIconIfHovered(frame)
         if frame.extraFrames then
             for _, extra in ipairs(frame.extraFrames) do
                 extra:Hide()

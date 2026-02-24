@@ -148,6 +148,56 @@ local function CreateClickOverlay(frame)
 end
 
 -- ============================================================================
+-- PET SPEC ICON HOVER
+-- ============================================================================
+-- On hover, swaps a pet frame's icon to the spec ability icon (Cunning/Ferocity/Tenacity).
+-- Hooks are installed once per overlay; the spec icon reference is read from the
+-- buff frame at event time so it stays in sync with display updates.
+
+---@param overlay table SecureActionButton overlay
+---@param frame table The buff frame whose icon to swap
+local function HookPetSpecIconHover(overlay, frame)
+    if overlay._br_pet_hover_hooked then
+        return
+    end
+    overlay._br_pet_hover_hooked = true
+    overlay:HookScript("OnEnter", function()
+        if not (BuffRemindersDB.defaults or {}).petSpecIconOnHover then
+            return
+        end
+        local specIcon = frame._br_pet_spec_icon
+        if specIcon then
+            overlay._br_pet_hovering = true
+            overlay._br_pet_real_icon = frame.icon:GetTexture()
+            frame.icon:SetTexture(specIcon)
+        end
+    end)
+    overlay:HookScript("OnLeave", function()
+        overlay._br_pet_hovering = nil
+        local realIcon = overlay._br_pet_real_icon
+        if realIcon then
+            frame.icon:SetTexture(realIcon)
+            overlay._br_pet_real_icon = nil
+        end
+    end)
+end
+
+--- Re-apply pet spec icon if the overlay is currently hovered (called after display updates).
+--- The display code just set the real icon, so we save it before re-swapping.
+---@param frame table The buff frame to check
+local function ReapplyPetSpecIconIfHovered(frame)
+    local overlay = frame.clickOverlay
+    if not overlay or not overlay._br_pet_hovering then
+        return
+    end
+    local specIcon = frame._br_pet_spec_icon
+    if specIcon and (BuffRemindersDB.defaults or {}).petSpecIconOnHover then
+        overlay._br_pet_real_icon = frame.icon:GetTexture()
+        frame.icon:SetTexture(specIcon)
+    end
+end
+
+-- ============================================================================
 -- CONSUMABLE ACTION BUTTONS
 -- ============================================================================
 
@@ -855,6 +905,9 @@ local function UpdateActionButtons(category)
                         if overlay.highlight then
                             overlay.highlight:SetShown(frameHighlight)
                         end
+                        if frame._br_pet_spec_icon then
+                            HookPetSpecIconHover(overlay, frame)
+                        end
                     elseif frame.clickOverlay then
                         frame.clickOverlay._br_has_action = false
                         frame.clickOverlay:EnableMouse(false)
@@ -874,6 +927,9 @@ local function UpdateActionButtons(category)
                                 extra.clickOverlay:EnableMouse(true)
                                 if extra.clickOverlay.highlight then
                                     extra.clickOverlay.highlight:SetShown(frameHighlight)
+                                end
+                                if extra._br_pet_spec_icon then
+                                    HookPetSpecIconHover(extra.clickOverlay, extra)
                                 end
                             elseif extra.clickOverlay then
                                 extra.clickOverlay:EnableMouse(false)
@@ -951,4 +1007,5 @@ BR.SecureButtons = {
     HideAllSecureFrames = HideAllSecureFrames,
     ScheduleSecureSync = ScheduleSecureSync,
     SetQualityOverlay = SetQualityOverlay,
+    ReapplyPetSpecIconIfHovered = ReapplyPetSpecIconIfHovered,
 }

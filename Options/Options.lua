@@ -1216,6 +1216,28 @@ local function CreateOptionsPanel()
                 end,
             })
             catLayout:Add(highlightHolder, nil, COMPONENT_GAP)
+
+            if category == "pet" then
+                local specIconHolder = Components.Checkbox(catContent, {
+                    label = "Show hunter pet spec icon on hover",
+                    get = function()
+                        return BR.Config.Get("defaults.petSpecIconOnHover", true)
+                    end,
+                    enabled = function()
+                        local hcs = db.categorySettings and db.categorySettings[category]
+                        return hcs and hcs.clickable == true
+                    end,
+                    tooltip = {
+                        title = "Pet spec icon on hover",
+                        desc = "Swap the pet icon to its specialization ability (Cunning, Ferocity, Tenacity) when hovering.",
+                    },
+                    onChange = function(checked)
+                        BR.Config.Set("defaults.petSpecIconOnHover", checked)
+                    end,
+                })
+                catLayout:Add(specIconHolder, nil, COMPONENT_GAP)
+            end
+
             catLayout:SetX(0)
         end
 

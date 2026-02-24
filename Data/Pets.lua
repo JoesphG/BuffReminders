@@ -18,6 +18,7 @@ local _, BR = ...
 ---@field label string
 ---@field sortOrder number
 ---@field petFamily? string            -- Pet specialization (hunter only, e.g. "Ferocity")
+---@field petSpecIcon? number          -- Spec ability icon texture (hunter only)
 ---@field petSpiritBeast? boolean      -- True if Spirit Beast family
 
 ---@class PetActionList : PetAction[]
@@ -28,6 +29,13 @@ local CALL_PET_SPELLS = { 883, 83242, 83243, 83244, 83245 }
 
 -- Revive Pet spell ID
 local REVIVE_PET = 982
+
+-- Hunter pet spec → ability icon texture
+local PET_SPEC_ICONS = {
+    Cunning = 348567,
+    Ferocity = 136224,
+    Tenacity = 571585,
+}
 
 -- Warlock Summon Demon flyout ID
 local SUMMON_DEMON_FLYOUT = 10
@@ -66,6 +74,7 @@ local function BuildHunterActions()
                     label = info.name,
                     sortOrder = order,
                     petFamily = info.specialization,
+                    petSpecIcon = PET_SPEC_ICONS[info.specialization],
                     petSpiritBeast = info.familyName == "Spirit Beast" or nil,
                 }
             end

@@ -168,6 +168,7 @@ local DefaultSettingKeys = {
     petDisplayMode = "DisplayRefresh",
     petLabels = "DisplayRefresh",
     petLabelScale = "DisplayRefresh",
+    petSpecIconOnHover = "DisplayRefresh",
     -- Font (global-only, lives under defaults)
     fontFace = "VisualsRefresh",
 }
