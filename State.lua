@@ -23,6 +23,7 @@ local _, BR = ...
 ---@field iconByRole table<RoleType,number>? -- Role-based icon override
 ---@field rebuffWarning boolean?             -- Consumable rebuff pulsing border?
 ---@field isEating boolean?                 -- Food entry: player is currently eating
+---@field eatingExpirationTime number?      -- GetTime()-based expiration of eating aura
 ---@field petActions PetActionList?           -- Expanded pet summon actions
 
 -- Buff tables from Buffs.lua (via BR namespace)
@@ -754,6 +755,19 @@ local function UpdateEatingState(updateInfo)
     end
 end
 
+---Get expiration time of the eating aura (O(1) lookup via cached instance ID)
+---@return number? expirationTime GetTime()-based expiration, nil if not eating or no duration
+local function GetEatingExpirationTime()
+    if not eatingAuraInstanceID then
+        return nil
+    end
+    local ok, auraData = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, "player", eatingAuraInstanceID)
+    if not ok or not auraData or not auraData.expirationTime or auraData.expirationTime == 0 then
+        return nil
+    end
+    return auraData.expirationTime
+end
+
 ---Check if player is missing a consumable buff, weapon enchant, or inventory item (returns true if missing)
 ---@param spellIDs? SpellID
 ---@param buffIconID? number
@@ -962,6 +976,7 @@ function BuffState.Refresh()
         entry.expiringTime = nil
         entry.rebuffWarning = nil -- legacy field, still cleared for safety
         entry.isEating = nil
+        entry.eatingExpirationTime = nil
         entry.petActions = nil
     end
 
@@ -1152,9 +1167,12 @@ function BuffState.Refresh()
             elseif consGlow and not buff.noExpirationGlow then
                 TrySetEntryExpiring(entry, remainingTime, consGlowThreshold)
             end
-            -- Eating state for food entries (display uses this for icon override)
+            -- Eating state for food entries (display uses this for icon override + countdown)
             if entry.visible and buff.key == "food" then
                 entry.isEating = IsPlayerEating()
+                if entry.isEating then
+                    entry.eatingExpirationTime = GetEatingExpirationTime()
+                end
             end
         end
     end
@@ -1319,6 +1337,7 @@ BR.StateHelpers = {
     FormatRemainingTime = FormatRemainingTime,
     UpdateEatingState = UpdateEatingState,
     ScanEatingState = ScanEatingState,
+    GetEatingExpirationTime = GetEatingExpirationTime,
     GetCurrentContentType = GetCurrentContentType,
     IsCategoryVisibleForContent = IsCategoryVisibleForContent,
     GetBuffSettingKey = GetBuffSettingKey,

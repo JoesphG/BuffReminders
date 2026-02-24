@@ -1527,13 +1527,44 @@ local function RenderVisibleEntry(frame, entry)
     if entry.isEating then
         frame.icon:SetTexture(EATING_ICON)
         frame._br_eating_icon = true
-        frame.count:Hide()
+        if entry.eatingExpirationTime then
+            -- Seed initial text, then hand off to per-frame OnUpdate for smooth countdown
+            local remaining = entry.eatingExpirationTime - GetTime()
+            if remaining > 0 then
+                frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
+                frame.count:SetText(FormatRemainingTime(remaining))
+                frame.count:Show()
+            else
+                frame.count:Hide()
+            end
+            -- Per-frame OnUpdate: updates countdown text every render frame
+            if not frame._br_eating_onupdate then
+                local expTime = entry.eatingExpirationTime
+                frame:SetScript("OnUpdate", function()
+                    local rem = expTime - GetTime()
+                    if rem > 0 then
+                        frame.count:SetText(FormatRemainingTime(rem))
+                    else
+                        frame.count:Hide()
+                        frame:SetScript("OnUpdate", nil)
+                        frame._br_eating_onupdate = nil
+                    end
+                end)
+                frame._br_eating_onupdate = true
+            end
+        else
+            frame.count:Hide()
+        end
         frame:Show()
         SetExpirationGlow(frame, false)
         return true
     elseif frame._br_eating_icon then
         -- Transition from eating → not eating: restore the correct consumable icon
         frame._br_eating_icon = nil
+        if frame._br_eating_onupdate then
+            frame:SetScript("OnUpdate", nil)
+            frame._br_eating_onupdate = nil
+        end
         ResolveConsumableFrame(frame)
     end
 
