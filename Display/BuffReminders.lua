@@ -1481,39 +1481,119 @@ end
 local EATING_ICON = BR.EATING_AURA_ICON
 local FOOD_BORDER_REGULAR = { 0.20, 0.75, 1.00, 1.00 }
 local FOOD_BORDER_HEARTY = { 1.00, 0.82, 0.00, 1.00 }
-local FOOD_ABBREV_STOPWORDS = {
-    ["and"] = true,
-    ["the"] = true,
-    ["of"] = true,
-    ["with"] = true,
-    ["in"] = true,
-    ["on"] = true,
-    ["a"] = true,
-    ["an"] = true,
-}
-
----@param itemName string?
+---@param tooltipLines string[]
 ---@return string?
-local function BuildFoodAbbreviation(itemName)
-    if type(itemName) ~= "string" or itemName == "" then
+local function ParseFoodLabelFromTooltip(tooltipLines)
+    if type(tooltipLines) ~= "table" or #tooltipLines == 0 then
         return nil
     end
 
-    local letters = {}
-    for word in itemName:gmatch("[%a']+") do
-        local lower = word:lower()
-        if lower ~= "hearty" and not FOOD_ABBREV_STOPWORDS[lower] then
-            letters[#letters + 1] = word:sub(1, 1):upper()
-            if #letters >= 3 then
-                break
+    local seen = {
+        Mast = false,
+        Haste = false,
+        Crit = false,
+        Vers = false,
+        Stam = false,
+        Str = false,
+        Agi = false,
+        Int = false,
+    }
+    local foundFeast = false
+    for _, line in ipairs(tooltipLines) do
+        local l = line:lower()
+        if l:find("feast", 1, true) then
+            foundFeast = true
+        end
+        if l:find("movement speed", 1, true) or l:find("movement%s+and%s+swim%s+speed") then
+            return "Speed"
+        end
+        if l:find("random", 1, true) and l:find("stat", 1, true) then
+            return "Random"
+        end
+        if l:find("highest", 1, true) and l:find("stat", 1, true) then
+            if foundFeast or l:find("feast", 1, true) then
+                return "HiStatFeast"
             end
+            return "HiStat"
+        end
+        if l:find("lowest", 1, true) and l:find("stat", 1, true) then
+            if l:find("size", 1, true) or l:find("larger", 1, true) or l:find("grow", 1, true) then
+                return "LoStatSize"
+            end
+            return "LoStat"
+        end
+        if l:find("mastery", 1, true) then
+            seen.Mast = true
+        end
+        if l:find("haste", 1, true) then
+            seen.Haste = true
+        end
+        if l:find("critical strike", 1, true) or l:find("critical", 1, true) then
+            seen.Crit = true
+        end
+        if l:find("versatility", 1, true) then
+            seen.Vers = true
+        end
+        if l:find("stamina", 1, true) then
+            seen.Stam = true
+        end
+        if l:find("strength", 1, true) then
+            seen.Str = true
+        end
+        if l:find("agility", 1, true) then
+            seen.Agi = true
+        end
+        if l:find("intellect", 1, true) then
+            seen.Int = true
         end
     end
 
-    if #letters == 0 then
-        return nil
+    if seen.Mast and seen.Haste then
+        return "M/H"
     end
-    return table.concat(letters)
+    if seen.Haste and seen.Crit then
+        return "H/C"
+    end
+    if seen.Crit and seen.Vers then
+        return "C/V"
+    end
+    if seen.Mast and seen.Vers then
+        return "M/V"
+    end
+    if seen.Mast and seen.Crit then
+        return "M/C"
+    end
+    if seen.Haste and seen.Vers then
+        return "H/V"
+    end
+    if seen.Mast then
+        return "Mast"
+    end
+    if seen.Haste then
+        return "Haste"
+    end
+    if seen.Crit then
+        return "Crit"
+    end
+    if seen.Vers then
+        return "Vers"
+    end
+    if seen.Stam then
+        return "Stam"
+    end
+    if seen.Str then
+        return "Str"
+    end
+    if seen.Agi then
+        return "Agi"
+    end
+    if seen.Int then
+        return "Int"
+    end
+    if foundFeast then
+        return "Feast"
+    end
+    return nil
 end
 
 ---@param itemName string?
@@ -1548,7 +1628,9 @@ end
 ---@param frame BuffFrame
 ---@param item table?
 local function ApplyFoodConsumableDecor(frame, item)
-    if frame.key ~= "food" then
+    local isFoodFrame = (frame.key == "food")
+        or (frame.mainFrame and frame.mainFrame.key == "food")
+    if not isFoodFrame then
         ResetFoodConsumableDecor(frame)
         return
     end
@@ -1557,7 +1639,26 @@ local function ApplyFoodConsumableDecor(frame, item)
         return
     end
 
-    if type(item.foodAbbrev) ~= "string" or item.foodAbbrev == "" then
+    if
+        type(item.foodLabel) ~= "string"
+        or item.foodLabel == ""
+        or (item.foodLabel == "Food" and item.foodLabelReliable ~= true)
+    then
+        local lines = {}
+        local tooltip = _G.BuffRemindersFoodTooltipScan
+            or CreateFrame("GameTooltip", "BuffRemindersFoodTooltipScan", UIParent, "GameTooltipTemplate")
+        tooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        tooltip:ClearLines()
+        if item.itemID then
+            tooltip:SetItemByID(item.itemID)
+            for i = 2, tooltip:NumLines() do
+                local fs = _G["BuffRemindersFoodTooltipScanTextLeft" .. i]
+                local text = fs and fs:GetText()
+                if type(text) == "string" and text ~= "" then
+                    lines[#lines + 1] = text
+                end
+            end
+        end
         local itemName = nil
         if item.itemID and C_Item and C_Item.GetItemNameByID then
             itemName = C_Item.GetItemNameByID(item.itemID)
@@ -1566,19 +1667,19 @@ local function ApplyFoodConsumableDecor(frame, item)
             itemName = GetItemInfo(item.itemID)
         end
         if itemName then
-            item.foodAbbrev = BuildFoodAbbreviation(itemName)
+            item.foodLabel = ParseFoodLabelFromTooltip(lines) or "Food"
             item.foodHearty = IsHeartyFoodName(itemName)
+            item.foodLabelReliable = (#lines > 0)
         end
     end
-    if type(item.foodAbbrev) ~= "string" or item.foodAbbrev == "" then
-        ResetFoodConsumableDecor(frame)
-        return
+    if type(item.foodLabel) ~= "string" or item.foodLabel == "" then
+        item.foodLabel = "Food"
     end
 
     EnsureFoodConsumableDecor(frame)
 
     local isHearty = item.foodHearty == true
-    local label = (isHearty and "H-" or "R-") .. item.foodAbbrev
+    local label = (isHearty and "H-" or "R-") .. item.foodLabel
     local fontSize = math.max(8, math.floor(frame:GetWidth() * 0.22))
     frame.foodTypeText:SetFont(fontPath, fontSize, "OUTLINE")
     frame.foodTypeText:SetText(label)
@@ -1697,6 +1798,17 @@ local function RenderVisibleEntry(frame, entry)
         frame:Show()
         SetExpirationGlow(frame, entry.shouldGlow, entry.category, cachedGlow)
     elseif entry.displayType == "expiring" then
+        if BUFF_KEY_TO_CATEGORY[frame.key] then
+            local items = frame._cachedItems
+            if items == nil then
+                items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
+                frame._cachedItems = items
+            end
+            if items and items[1] then
+                frame.icon:SetTexture(items[1].icon)
+                ApplyFoodConsumableDecor(frame, items[1])
+            end
+        end
         frame.count:SetFont(fontPath, GetFrameFontSize(frame), "OUTLINE")
         frame.count:SetText(entry.countText or "")
         frame.count:Show()
@@ -1750,7 +1862,10 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
         end
     end
 
-    if entry.displayType ~= "missing" or entry.isEating then
+    if entry.isEating then
+        return
+    end
+    if entry.displayType ~= "missing" and entry.displayType ~= "expiring" then
         return
     end
     if not BUFF_KEY_TO_CATEGORY[frame.key] or not frame:IsShown() then
@@ -1758,13 +1873,18 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
     end
 
     local displayMode = (BuffRemindersDB.defaults or {}).consumableDisplayMode or "sub_icons"
+    local effectiveMode = displayMode
+    -- Expiring consumables should always fan out all available options with remaining time.
+    if entry.displayType == "expiring" then
+        effectiveMode = "expanded"
+    end
     local items = frame._cachedItems
     if items == nil then
         items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
         frame._cachedItems = items
     end
 
-    if displayMode == "sub_icons" then
+    if effectiveMode == "sub_icons" then
         local cs = BuffRemindersDB.categorySettings and BuffRemindersDB.categorySettings.consumable
         local clickable = cs and cs.clickable == true
         -- Skip first item (already shown as main icon)
@@ -1772,7 +1892,7 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
     else
         -- Not sub_icons: hide any leftover sub-icon buttons
         BR.SecureButtons.UpdateConsumableButtons(frame, nil)
-        if displayMode == "expanded" and items and #items > 1 then
+        if effectiveMode == "expanded" and items and #items > 1 then
             local cachedGlow = entry.category and GetCachedGlowSettings(entry.category) or nil
             for i = 2, #items do
                 local extra = GetOrCreateExtraFrame(frame, i - 1)
@@ -1783,9 +1903,16 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
                 if extra.qualityOverlay then
                     BR.SecureButtons.SetQualityOverlay(extra.qualityOverlay, items[i].craftedQuality, frame:GetWidth())
                 end
-                extra.stackCount:SetText(items[i].count)
-                extra.stackCount:Show()
-                extra.count:Hide()
+                if entry.displayType == "expiring" then
+                    extra.stackCount:Hide()
+                    extra.count:SetFont(fontPath, GetFrameFontSize(extra), "OUTLINE")
+                    extra.count:SetText(entry.countText or "")
+                    extra.count:Show()
+                else
+                    extra.stackCount:SetText(items[i].count)
+                    extra.stackCount:Show()
+                    extra.count:Hide()
+                end
                 extra:Show()
                 SetExpirationGlow(extra, entry.shouldGlow, entry.category, cachedGlow)
                 frameList[#frameList + 1] = extra

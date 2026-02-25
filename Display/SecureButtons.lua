@@ -289,16 +289,9 @@ local ACTION_ICON_MIN = 18
 local ACTION_ICON_OFFSET = -6
 local FOOD_REGULAR_BORDER = { r = 0.20, g = 0.75, b = 1.00, a = 1.00 }
 local FOOD_HEARTY_BORDER = { r = 1.00, g = 0.82, b = 0.00, a = 1.00 }
-local FOOD_ABBREV_STOPWORDS = {
-    ["and"] = true,
-    ["the"] = true,
-    ["of"] = true,
-    ["with"] = true,
-    ["in"] = true,
-    ["on"] = true,
-    ["a"] = true,
-    ["an"] = true,
-}
+local foodTooltip = CreateFrame("GameTooltip", "BuffRemindersFoodTooltipScan", UIParent, "GameTooltipTemplate")
+foodTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+local foodLabelCache = {}
 
 -- Quality text and colors for crafted consumables (rank 1/2/3)
 local QUALITY_INFO = {
@@ -329,45 +322,191 @@ local function SetQualityOverlay(overlay, craftedQuality, size)
     end
 end
 
----Build a short label for food items from the item name.
----@param itemName string?
+---@param tooltipLines string[]
 ---@return string?
-local function BuildFoodAbbreviation(itemName)
-    if type(itemName) ~= "string" or itemName == "" then
+local function ParseFoodLabelFromTooltip(tooltipLines)
+    if type(tooltipLines) ~= "table" or #tooltipLines == 0 then
         return nil
     end
 
-    local letters = {}
-    for word in itemName:gmatch("[%a']+") do
-        local lower = word:lower()
-        if lower ~= "hearty" and not FOOD_ABBREV_STOPWORDS[lower] then
-            letters[#letters + 1] = word:sub(1, 1):upper()
-            if #letters >= 3 then
-                break
+    local seen = {
+        Mast = false,
+        Haste = false,
+        Crit = false,
+        Vers = false,
+        Stam = false,
+        Str = false,
+        Agi = false,
+        Int = false,
+    }
+    local foundFeast = false
+
+    for _, line in ipairs(tooltipLines) do
+        local l = line:lower()
+        if l:find("feast", 1, true) then
+            foundFeast = true
+        end
+        if l:find("movement speed", 1, true) or l:find("movement%s+and%s+swim%s+speed") then
+            return "Speed"
+        end
+        if l:find("random", 1, true) and l:find("stat", 1, true) then
+            return "Random"
+        end
+        if l:find("highest", 1, true) and l:find("stat", 1, true) then
+            if foundFeast or l:find("feast", 1, true) then
+                return "HiStatFeast"
             end
+            return "HiStat"
+        end
+        if l:find("lowest", 1, true) and l:find("stat", 1, true) then
+            if l:find("size", 1, true) or l:find("larger", 1, true) or l:find("grow", 1, true) then
+                return "LoStatSize"
+            end
+            return "LoStat"
+        end
+
+        if l:find("mastery", 1, true) then
+            seen.Mast = true
+        end
+        if l:find("haste", 1, true) then
+            seen.Haste = true
+        end
+        if l:find("critical strike", 1, true) or l:find("critical", 1, true) then
+            seen.Crit = true
+        end
+        if l:find("versatility", 1, true) then
+            seen.Vers = true
+        end
+        if l:find("stamina", 1, true) then
+            seen.Stam = true
+        end
+        if l:find("strength", 1, true) then
+            seen.Str = true
+        end
+        if l:find("agility", 1, true) then
+            seen.Agi = true
+        end
+        if l:find("intellect", 1, true) then
+            seen.Int = true
         end
     end
 
-    if #letters == 0 then
-        return nil
+    if seen.Mast and seen.Haste then
+        return "M/H"
     end
-    return table.concat(letters)
+    if seen.Haste and seen.Crit then
+        return "H/C"
+    end
+    if seen.Crit and seen.Vers then
+        return "C/V"
+    end
+    if seen.Mast and seen.Vers then
+        return "M/V"
+    end
+    if seen.Mast and seen.Crit then
+        return "M/C"
+    end
+    if seen.Haste and seen.Vers then
+        return "H/V"
+    end
+    if seen.Mast then
+        return "Mast"
+    end
+    if seen.Haste then
+        return "Haste"
+    end
+    if seen.Crit then
+        return "Crit"
+    end
+    if seen.Vers then
+        return "Vers"
+    end
+    if seen.Stam then
+        return "Stam"
+    end
+    if seen.Str then
+        return "Str"
+    end
+    if seen.Agi then
+        return "Agi"
+    end
+    if seen.Int then
+        return "Int"
+    end
+    if foundFeast then
+        return "Feast"
+    end
+    return nil
 end
 
----@param itemName string?
----@return boolean
-local function IsHeartyFoodName(itemName)
-    if type(itemName) ~= "string" or itemName == "" then
-        return false
+---@param itemLink string?
+---@return string[]
+local function GetTooltipLinesFromLink(itemLink)
+    local out = {}
+    if type(itemLink) ~= "string" or itemLink == "" then
+        return out
     end
-    return itemName:lower():find("hearty", 1, true) ~= nil
+    if C_TooltipInfo and C_TooltipInfo.GetHyperlink then
+        local info = C_TooltipInfo.GetHyperlink(itemLink)
+        local lines = info and info.lines
+        if type(lines) == "table" then
+            for _, line in ipairs(lines) do
+                local txt = line and line.leftText
+                if type(txt) == "string" and txt ~= "" then
+                    out[#out + 1] = txt
+                end
+            end
+        end
+    end
+    return out
+end
+
+---@param itemID number
+---@param itemName string?
+---@param itemLink string?
+---@return string, boolean, boolean
+local function ResolveFoodText(itemID, itemName, itemLink)
+    local cached = foodLabelCache[itemID]
+    if cached and cached.reliable == true then
+        return cached.label, cached.hearty, true
+    end
+
+    local lines = GetTooltipLinesFromLink(itemLink)
+    local hadTooltipLines = #lines > 0
+    if #lines == 0 then
+        foodTooltip:ClearLines()
+        foodTooltip:SetItemByID(itemID)
+        for i = 2, foodTooltip:NumLines() do
+            local fs = _G["BuffRemindersFoodTooltipScanTextLeft" .. i]
+            local text = fs and fs:GetText()
+            if type(text) == "string" and text ~= "" then
+                lines[#lines + 1] = text
+            end
+        end
+        hadTooltipLines = #lines > 0
+    end
+
+    local label = ParseFoodLabelFromTooltip(lines)
+    if not label then
+        label = "Food"
+    end
+    local name = type(itemName) == "string" and itemName or (GetItemInfo(itemID))
+    local hearty = type(name) == "string" and name:lower():find("hearty", 1, true) ~= nil
+    -- Cache as reliable only once we successfully scraped tooltip lines.
+    -- If tooltip lines are unavailable (cold cache/loading), allow future retries.
+    if hadTooltipLines then
+        foodLabelCache[itemID] = { label = label, hearty = hearty, reliable = true }
+    else
+        foodLabelCache[itemID] = { label = label, hearty = hearty, reliable = false }
+    end
+    return label, hearty, hadTooltipLines
 end
 
 ---@param btn table
 ---@param size number
 local function ApplyFoodActionStyle(btn, size)
-    local abbrev = btn._br_food_abbrev
-    if type(abbrev) ~= "string" or abbrev == "" then
+    local label = btn._br_food_label
+    if type(label) ~= "string" or label == "" then
         if btn.foodTypeText then
             btn.foodTypeText:Hide()
         end
@@ -381,7 +520,7 @@ local function ApplyFoodActionStyle(btn, size)
     local fontPath = BR.Display.GetFontPath()
     local fontSize = math.max(7, math.floor(size * 0.28))
     btn.foodTypeText:SetFont(fontPath, fontSize, "OUTLINE")
-    btn.foodTypeText:SetText((hearty and "H-" or "R-") .. abbrev)
+    btn.foodTypeText:SetText((hearty and "H-" or "R-") .. label)
     btn.foodTypeText:SetTextColor(1, 1, 1, 1)
     btn.foodTypeText:Show()
 
@@ -501,19 +640,20 @@ local function RefreshConsumableCache()
                                     cq = tonumber(tier)
                                 end
                             end
-                            local foodAbbrev = nil
+                            local foodLabel = nil
                             local foodHearty = false
+                            local foodLabelReliable = false
                             if category == "food" then
-                                foodAbbrev = BuildFoodAbbreviation(itemName)
-                                foodHearty = IsHeartyFoodName(itemName)
+                                foodLabel, foodHearty, foodLabelReliable = ResolveFoodText(itemID, itemName, itemLink)
                             end
                             buckets[category][itemID] = {
                                 itemID = itemID,
                                 count = count,
                                 icon = icon,
                                 craftedQuality = cq,
-                                foodAbbrev = foodAbbrev,
+                                foodLabel = foodLabel,
                                 foodHearty = foodHearty,
+                                foodLabelReliable = foodLabelReliable,
                             }
                         end
                     end
@@ -608,7 +748,7 @@ local function UpdateConsumableButtons(frame, actionItems, clickable, startIndex
         btn.itemID = item.itemID
         btn.icon:SetTexture(item.icon or 134400)
         btn._br_craftedQuality = item.craftedQuality
-        btn._br_food_abbrev = item.foodAbbrev
+        btn._br_food_label = item.foodLabel
         btn._br_food_hearty = item.foodHearty == true
 
         -- Dirty tracking: skip redundant SetAttribute calls
