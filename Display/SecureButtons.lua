@@ -184,6 +184,11 @@ end
 local ACTION_ICON_SCALE = 0.45
 local ACTION_ICON_MIN = 18
 local ACTION_ICON_OFFSET = -6
+local FOOD_REGULAR_BORDER = { r = 0.20, g = 0.75, b = 1.00, a = 1.00 }
+local FOOD_HEARTY_BORDER = { r = 1.00, g = 0.82, b = 0.00, a = 1.00 }
+local foodTooltip = CreateFrame("GameTooltip", "BuffRemindersFoodTooltipScan", UIParent, "GameTooltipTemplate")
+foodTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+local foodLabelCache = {}
 
 -- Quality text and colors for crafted consumables (rank 1/2/3)
 local QUALITY_INFO = {
@@ -212,6 +217,216 @@ local function SetQualityOverlay(overlay, craftedQuality, size)
     else
         overlay:Hide()
     end
+end
+
+---@param tooltipLines string[]
+---@return string?
+local function ParseFoodLabelFromTooltip(tooltipLines)
+    if type(tooltipLines) ~= "table" or #tooltipLines == 0 then
+        return nil
+    end
+
+    local seen = {
+        Mast = false,
+        Haste = false,
+        Crit = false,
+        Vers = false,
+        Stam = false,
+        Str = false,
+        Agi = false,
+        Int = false,
+    }
+    local foundFeast = false
+
+    for _, line in ipairs(tooltipLines) do
+        local l = line:lower()
+        if l:find("feast", 1, true) then
+            foundFeast = true
+        end
+        if l:find("movement speed", 1, true) or l:find("movement%s+and%s+swim%s+speed") then
+            return "Speed"
+        end
+        if l:find("random", 1, true) and l:find("stat", 1, true) then
+            return "Random"
+        end
+        if l:find("highest", 1, true) and l:find("stat", 1, true) then
+            if foundFeast or l:find("feast", 1, true) then
+                return "HiStatFeast"
+            end
+            return "HiStat"
+        end
+        if l:find("lowest", 1, true) and l:find("stat", 1, true) then
+            if l:find("size", 1, true) or l:find("larger", 1, true) or l:find("grow", 1, true) then
+                return "LoStatSize"
+            end
+            return "LoStat"
+        end
+
+        if l:find("mastery", 1, true) then
+            seen.Mast = true
+        end
+        if l:find("haste", 1, true) then
+            seen.Haste = true
+        end
+        if l:find("critical strike", 1, true) or l:find("critical", 1, true) then
+            seen.Crit = true
+        end
+        if l:find("versatility", 1, true) then
+            seen.Vers = true
+        end
+        if l:find("stamina", 1, true) then
+            seen.Stam = true
+        end
+        if l:find("strength", 1, true) then
+            seen.Str = true
+        end
+        if l:find("agility", 1, true) then
+            seen.Agi = true
+        end
+        if l:find("intellect", 1, true) then
+            seen.Int = true
+        end
+    end
+
+    if seen.Mast and seen.Haste then
+        return "M/H"
+    end
+    if seen.Haste and seen.Crit then
+        return "H/C"
+    end
+    if seen.Crit and seen.Vers then
+        return "C/V"
+    end
+    if seen.Mast and seen.Vers then
+        return "M/V"
+    end
+    if seen.Mast and seen.Crit then
+        return "M/C"
+    end
+    if seen.Haste and seen.Vers then
+        return "H/V"
+    end
+    if seen.Mast then
+        return "Mast"
+    end
+    if seen.Haste then
+        return "Haste"
+    end
+    if seen.Crit then
+        return "Crit"
+    end
+    if seen.Vers then
+        return "Vers"
+    end
+    if seen.Stam then
+        return "Stam"
+    end
+    if seen.Str then
+        return "Str"
+    end
+    if seen.Agi then
+        return "Agi"
+    end
+    if seen.Int then
+        return "Int"
+    end
+    if foundFeast then
+        return "Feast"
+    end
+    return nil
+end
+
+---@param itemLink string?
+---@return string[]
+local function GetTooltipLinesFromLink(itemLink)
+    local out = {}
+    if type(itemLink) ~= "string" or itemLink == "" then
+        return out
+    end
+    if C_TooltipInfo and C_TooltipInfo.GetHyperlink then
+        local info = C_TooltipInfo.GetHyperlink(itemLink)
+        local lines = info and info.lines
+        if type(lines) == "table" then
+            for _, line in ipairs(lines) do
+                local txt = line and line.leftText
+                if type(txt) == "string" and txt ~= "" then
+                    out[#out + 1] = txt
+                end
+            end
+        end
+    end
+    return out
+end
+
+---@param itemID number
+---@param itemName string?
+---@param itemLink string?
+---@return string, boolean, boolean
+local function ResolveFoodText(itemID, itemName, itemLink)
+    local cached = foodLabelCache[itemID]
+    if cached and cached.reliable == true then
+        return cached.label, cached.hearty, true
+    end
+
+    local lines = GetTooltipLinesFromLink(itemLink)
+    local hadTooltipLines = #lines > 0
+    if #lines == 0 then
+        foodTooltip:ClearLines()
+        foodTooltip:SetItemByID(itemID)
+        for i = 2, foodTooltip:NumLines() do
+            local fs = _G["BuffRemindersFoodTooltipScanTextLeft" .. i]
+            local text = fs and fs:GetText()
+            if type(text) == "string" and text ~= "" then
+                lines[#lines + 1] = text
+            end
+        end
+        hadTooltipLines = #lines > 0
+    end
+
+    local label = ParseFoodLabelFromTooltip(lines)
+    if not label then
+        label = "Food"
+    end
+    local name = type(itemName) == "string" and itemName or (GetItemInfo(itemID))
+    local hearty = type(name) == "string" and name:lower():find("hearty", 1, true) ~= nil
+    -- Cache as reliable only once we successfully scraped tooltip lines.
+    -- If tooltip lines are unavailable (cold cache/loading), allow future retries.
+    if hadTooltipLines then
+        foodLabelCache[itemID] = { label = label, hearty = hearty, reliable = true }
+    else
+        foodLabelCache[itemID] = { label = label, hearty = hearty, reliable = false }
+    end
+    return label, hearty, hadTooltipLines
+end
+
+---@param btn table
+---@param size number
+local function ApplyFoodActionStyle(btn, size)
+    local label = btn._br_food_label
+    if type(label) ~= "string" or label == "" then
+        if btn.foodTypeText then
+            btn.foodTypeText:Hide()
+        end
+        if btn.foodBorder then
+            btn.foodBorder:Hide()
+        end
+        return
+    end
+
+    local hearty = btn._br_food_hearty == true
+    local fontPath = BR.Display.GetFontPath()
+    local fontSize = math.max(7, math.floor(size * 0.28))
+    btn.foodTypeText:SetFont(fontPath, fontSize, "OUTLINE")
+    btn.foodTypeText:SetText((hearty and "H-" or "R-") .. label)
+    btn.foodTypeText:SetTextColor(1, 1, 1, 1)
+    btn.foodTypeText:Show()
+
+    local color = hearty and FOOD_HEARTY_BORDER or FOOD_REGULAR_BORDER
+    btn.foodBorder:ClearAllPoints()
+    btn.foodBorder:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
+    btn.foodBorder:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+    btn.foodBorder:SetColorTexture(color.r, color.g, color.b, color.a)
+    btn.foodBorder:Show()
 end
 
 ---Create a small SecureActionButton for the consumable item row.
@@ -256,6 +471,13 @@ local function CreateActionButton()
     btn.qualityOverlay = btn:CreateFontString(nil, "OVERLAY")
     btn.qualityOverlay:Hide()
 
+    btn.foodTypeText = btn:CreateFontString(nil, "OVERLAY")
+    btn.foodTypeText:SetPoint("TOP", btn, "TOP", 0, -1)
+    btn.foodTypeText:Hide()
+
+    btn.foodBorder = btn:CreateTexture(nil, "BACKGROUND")
+    btn.foodBorder:Hide()
+
     return btn
 end
 
@@ -299,6 +521,13 @@ local function RefreshConsumableCache()
                             local info = C_Container.GetContainerItemInfo(bag, slot)
                             local icon = info and info.iconFileID or nil
                             local itemLink = info and info.hyperlink
+                            local itemName = info and info.itemName
+                            if not itemName and C_Item and C_Item.GetItemNameByID then
+                                itemName = C_Item.GetItemNameByID(itemID)
+                            end
+                            if not itemName then
+                                itemName = GetItemInfo(itemID)
+                            end
                             local cq = nil
                             if itemLink then
                                 -- Parse crafted quality tier from the embedded atlas in the item link
@@ -308,11 +537,20 @@ local function RefreshConsumableCache()
                                     cq = tonumber(tier)
                                 end
                             end
+                            local foodLabel = nil
+                            local foodHearty = false
+                            local foodLabelReliable = false
+                            if category == "food" then
+                                foodLabel, foodHearty, foodLabelReliable = ResolveFoodText(itemID, itemName, itemLink)
+                            end
                             buckets[category][itemID] = {
                                 itemID = itemID,
                                 count = count,
                                 icon = icon,
                                 craftedQuality = cq,
+                                foodLabel = foodLabel,
+                                foodHearty = foodHearty,
+                                foodLabelReliable = foodLabelReliable,
                             }
                         end
                     end
@@ -407,6 +645,8 @@ local function UpdateConsumableButtons(frame, actionItems, clickable, startIndex
         btn.itemID = item.itemID
         btn.icon:SetTexture(item.icon or 134400)
         btn._br_craftedQuality = item.craftedQuality
+        btn._br_food_label = item.foodLabel
+        btn._br_food_hearty = item.foodHearty == true
 
         -- Dirty tracking: skip redundant SetAttribute calls
         if btn._br_action_item ~= item.itemID then
@@ -616,6 +856,7 @@ local function SyncSecureButtons()
                                     )
                                     btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
                                     SetQualityOverlay(btn.qualityOverlay, btn._br_craftedQuality, size)
+                                    ApplyFoodActionStyle(btn, size)
                                     btn._br_needs_sync = false
                                 end
                                 -- Activate combat state driver on first show (buttons start with "hide" driver)

@@ -1068,7 +1068,7 @@ local function BuildLayoutSignature(frames)
     -- Use table.concat for efficiency; keys are short strings
     local keys = {}
     for i, frame in ipairs(frames) do
-        keys[i] = (frame.buffDef and frame.buffDef.key) or ""
+        keys[i] = (frame.buffDef and frame.buffDef.key) or frame.key or ""
     end
     return table.concat(keys, ",")
 end
@@ -1615,6 +1615,13 @@ local function ClearConsumableDynamicDisplay(frame)
 end
 
 local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
+    -- Always clean up leftover extra frames first (prevents orphans on state transitions)
+    if frame.extraFrames then
+        for _, extra in ipairs(frame.extraFrames) do
+            extra:Hide()
+        end
+    end
+
     if entry.displayType ~= "missing" or entry.isEating then
         ClearConsumableDynamicDisplay(frame)
         return
@@ -1629,12 +1636,6 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
     if items == nil then
         items = BR.SecureButtons.GetConsumableActionItems(frame.buffDef) or false
         frame._cachedItems = items
-    end
-    -- Hide leftover extra frames (re-shown below if still in "expanded" mode)
-    if frame.extraFrames then
-        for _, extra in ipairs(frame.extraFrames) do
-            extra:Hide()
-        end
     end
 
     if displayMode == "sub_icons" then

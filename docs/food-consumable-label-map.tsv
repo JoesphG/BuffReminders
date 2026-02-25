@@ -1,0 +1,157 @@
+222702	[TWW] Skewered Fillet	false	L Stat	LoStat	R-LoStat
+222703	[TWW] Simple Stew	false	L Stat	LoStat	R-LoStat
+222704	[TWW] Unseasoned Field Steak	false	L Stat	LoStat	R-LoStat
+222705	[TWW] Roasted Mycobloom	false	L Stat	LoStat	R-LoStat
+222706	[TWW] Pan Seared Mycobloom	false	L Stat	LoStat	R-LoStat
+222707	[TWW] Hallowfall Chili	false	L Stat	LoStat	R-LoStat
+222708	[TWW] Coreway Kabob	false	L Stat	LoStat	R-LoStat
+222709	[TWW] Flashfire Fillet	false	L Stat	LoStat	R-LoStat
+222710	[TWW] Meat and Potatoes	false	Str	Str	R-Str
+222711	[TWW] Rib Stickers	false	Agi	Agi	R-Agi
+222712	[TWW] Sweet and Sour Meatballs	false	Int	Int	R-Int
+222713	[TWW] Tender Twilight Jerky	false	Stam	Stam	R-Stam
+222714	[TWW] Zesty Nibblers	false	Haste	Haste	R-Haste
+222715	[TWW] Fiery Fish Sticks	false	Crit	Crit	R-Crit
+222716	[TWW] Ginger Glazed Fillet	false	Vers	Vers	R-Vers
+222717	[TWW] Salty Dog	false	Mast	Mast	R-Mast
+222718	[TWW] Deepfin Patty	false	H / C	H/C	R-H/C
+222719	[TWW] Sweet and Spicy Soup	false	H / V	H/V	R-H/V
+222720	[TWW] The Sushi Special	false	H Stat Feast	HiStatFeast	R-HiStatFeast
+222721	[TWW] Fish and Chips	false	C / V	C/V	R-C/V
+222722	[TWW] Salt Baked Seafood	false	M / C	M/C	R-M/C
+222723	[TWW] Marinated Tenderloins	false	M / V	M/V	R-M/V
+222724	[TWW] Sizzling Honey Roast	false	Str	Str	R-Str
+222725	[TWW] Mycobloom Risotto	false	Agi	Agi	R-Agi
+222726	[TWW] Stuffed Cave Peppers	false	Int	Int	R-Int
+222727	[TWW] Angler's Delight	false	Stam	Stam	R-Stam
+222728	[TWW] Beledar's Bounty	false	H Stat	HiStat	R-HiStat
+222729	[TWW] Empress' Farewell	false	H Stat	HiStat	R-HiStat
+222730	[TWW] Jester's Board	false	H Stat	HiStat	R-HiStat
+222731	[TWW] Outsider's Provisions	false	H Stat	HiStat	R-HiStat
+222732	[TWW] Feast of the Divine Day	false	Feast	Feast	R-Feast
+222733	[TWW] Feast of the Midnight Masquerade	false	Feast	Feast	R-Feast
+222735	[TWW] Everything Stew	false	L Stat	LoStat	R-LoStat
+222736	[TWW] Chippy Tea	false	M / H	M/H	R-M/H
+222750	[TWW] Hearty Skewered Fillet	true	L Stat	LoStat	H-LoStat
+222751	[TWW] Hearty Simple Stew	true	L Stat	LoStat	H-LoStat
+222752	[TWW] Hearty Unseasoned Field Steak	true	L Stat	LoStat	H-LoStat
+222753	[TWW] Hearty Roasted Mycobloom	true	L Stat	LoStat	H-LoStat
+222754	[TWW] Hearty Pan Seared Mycobloom	true	L Stat	LoStat	H-LoStat
+222755	[TWW] Hearty Hallowfall Chili	true	L Stat	LoStat	H-LoStat
+222756	[TWW] Hearty Coreway Kabob	true	L Stat	LoStat	H-LoStat
+222757	[TWW] Hearty Flashfire Fillet	true	L Stat	LoStat	H-LoStat
+222758	[TWW] Hearty Meat and Potatoes	true	Str	Str	H-Str
+222759	[TWW] Hearty Rib Stickers	true	Agi	Agi	H-Agi
+222760	[TWW] Hearty Sweet and Sour Meatballs	true	Int	Int	H-Int
+222761	[TWW] Hearty Tender Twilight Jerky	true	Stam	Stam	H-Stam
+222762	[TWW] Hearty Zesty Nibblers	true	Haste	Haste	H-Haste
+222763	[TWW] Hearty Fiery Fish Sticks	true	Crit	Crit	H-Crit
+222764	[TWW] Hearty Ginger Glazed Fillet	true	Vers	Vers	H-Vers
+222765	[TWW] Hearty Salty Dog	true	Mast	Mast	H-Mast
+222766	[TWW] Hearty Deepfin Patty	true	H / C	H/C	H-H/C
+222767	[TWW] Hearty Sweet and Spicy Soup	true	H / V	H/V	H-H/V
+222768	[TWW] Hearty Sushi Special	true	H Stat Feast	HiStatFeast	H-HiStatFeast
+222769	[TWW] Hearty Fish and Chips	true	C / V	C/V	H-C/V
+222770	[TWW] Hearty Salt Baked Seafood	true	M / C	M/C	H-M/C
+222771	[TWW] Hearty Marinated Tenderloins	true	M / V	M/V	H-M/V
+222772	[TWW] Hearty Sizzling Honey Roast	true	Str	Str	H-Str
+222773	[TWW] Hearty Mycobloom Risotto	true	Agi	Agi	H-Agi
+222774	[TWW] Hearty Stuffed Cave Peppers	true	Int	Int	H-Int
+222775	[TWW] Hearty Angler's Delight	true	Stam	Stam	H-Stam
+222776	[TWW] Hearty Beledar's Bounty	true	H Stat	HiStat	H-HiStat
+222777	[TWW] Hearty Empress' Farewell	true	H Stat	HiStat	H-HiStat
+222778	[TWW] Hearty Jester's Board	true	H Stat	HiStat	H-HiStat
+222779	[TWW] Hearty Outsider's Provisions	true	H Stat	HiStat	H-HiStat
+222780	[TWW] Hearty Feast of the Divine Day	true	Feast	Feast	H-Feast
+222781	[TWW] Hearty Feast of the Midnight Masquerade	true	Feast	Feast	H-Feast
+222783	[TWW] Hearty Everything Stew	true	L Stat	LoStat	H-LoStat
+222784	[TWW] Hearty Chippy Tea	true	M / H	M/H	H-M/H
+223966	[TWW] Everything-On-A-Stick	false	Random	Random	R-Random
+223967	[TWW] Protein Slurp	false	L Stat / Size	LoStatSize	R-LoStatSize
+223968	[TWW] Spongey Scramble	false	L Stat	LoStat	R-LoStat
+225592	[TWW] Exquisitely Eviscerated Muscle	false	Speed	Speed	R-Speed
+235805	[TWW] Authentic Undermine Clam Chowder	false	H Stat	HiStat	R-HiStat
+235853	[TWW] Hearty Authentic Undermine Clam Chowder	true	H Stat	HiStat	H-HiStat
+242272	Quel'dorei Medley	false		Food	R-Food
+242273	Blooming Feast	false		Food	R-Food
+242274	Champion's Bento	false		Food	R-Food
+242275	Royal Roast	false		Food	R-Food
+242276	Braised Blood Hunter	false		Food	R-Food
+242277	Crimson Calamari	false		Food	R-Food
+242278	Tasty Smoked Tetra	false		Food	R-Food
+242279	Baked Lucky Loa	false		Food	R-Food
+242280	Buttered Root Crab	false		Food	R-Food
+242281	Glitter Skewers	false		Food	R-Food
+242282	Null and Void Plate	false		Food	R-Food
+242283	Sun-Seared Lumifin	false		Food	R-Food
+242284	Void-Kissed Fish Rolls	false		Food	R-Food
+242285	Warped Wise Wings	false		Food	R-Food
+242286	Fel-Kissed Filet	false		Food	R-Food
+242287	Arcano Cutlets	false		Food	R-Food
+242288	Twilight Angler's Medley	false		Food	R-Food
+242289	Spellfire Filet	false		Food	R-Food
+242290	Wise Tails	false		Food	R-Food
+242291	Fried Bloomtail	false		Food	R-Food
+242292	Eversong Pudding	false		Food	R-Food
+242293	Sunwell Delight	false		Food	R-Food
+242294	Felberry Figs	false		Food	R-Food
+242295	Hearthflame Supper	false		Food	R-Food
+242296	Bloodthistle-wrapped Cutlets	false		Food	R-Food
+242302	Bloom Skewers	false		Food	R-Food
+242303	Mana-Infused Stew	false		Food	R-Food
+242304	Spiced Biscuits	false		Food	R-Food
+242305	Silvermoon Standard	false		Food	R-Food
+242306	Forager's Medley	false		Food	R-Food
+242307	Quick Sandwich	false		Food	R-Food
+242308	Portable Snack	false		Food	R-Food
+242309	Farstrider Rations	false		Food	R-Food
+242744	Hearty Quel'dorei Medley	true	Feast	Feast	H-Feast
+242745	Hearty Blooming Feast	true	Feast	Feast	H-Feast
+242746	Hearty Champion's Bento	true		Food	H-Food
+242747	Hearty Royal Roast	true		Food	H-Food
+242748	Hearty Braised Blood Hunter	true		Food	H-Food
+242749	Hearty Crimson Calamari	true		Food	H-Food
+242750	Hearty Tasty Smoked Tetra	true		Food	H-Food
+242751	Hearty Rootland Surprise	true		Food	H-Food
+242752	Hearty Buttered Root Crab	true		Food	H-Food
+242753	Hearty Glitter Skewers	true		Food	H-Food
+242754	Hearty Null and Void Plate	true		Food	H-Food
+242755	Hearty Sun-Seared Lumifin	true		Food	H-Food
+242756	Hearty Void-Kissed Fish Rolls	true		Food	H-Food
+242757	Hearty Warped Wise Wings	true		Food	H-Food
+242758	Hearty Fel-Kissed Filet	true		Food	H-Food
+242759	Hearty Arcano Cutlets	true		Food	H-Food
+242760	Hearty Twilight Angler's Medley	true		Food	H-Food
+242761	Hearty Spellfire Filet	true		Food	H-Food
+242762	Hearty Wise Tails	true		Food	H-Food
+242763	Hearty Fried Bloomtail	true		Food	H-Food
+242764	Hearty Eversong Pudding	true		Food	H-Food
+242765	Hearty Sunwell Delight	true		Food	H-Food
+242766	Hearty Felberry Figs	true		Food	H-Food
+242767	Hearty Hearthflame Supper	true		Food	H-Food
+242768	Hearty Bloodthistle-Wrapped Cutlets	true		Food	H-Food
+242769	Hearty Bloom Skewers	true		Food	H-Food
+242770	Hearty Mana-Infused Stew	true		Food	H-Food
+242771	Hearty Spiced Biscuits	true		Food	H-Food
+242772	Hearty Silvermoon Standard	true		Food	H-Food
+242773	Hearty Forager's Medley	true		Food	H-Food
+242774	Hearty Quick Sandwich	true		Food	H-Food
+242775	Hearty Portable Snack	true		Food	H-Food
+242776	Hearty Farstrider Rations	true		Food	H-Food
+255845	Silvermoon Parade	false		Food	R-Food
+255846	Harandar Celebration	false		Food	R-Food
+255847	Impossibly Royal Roast	false		Food	R-Food
+255848	Flora Frenzy	false		Food	R-Food
+266985	Hearty Silvermoon Parade	true	Feast	Feast	H-Feast
+266986	Hearty Quel'dorei Medley	true		Food	H-Food
+266996	Hearty Harandar Celebration	true	Feast	Feast	H-Feast
+267000	Hearty Flora Frenzy	true		Food	H-Food
+268679	Hearty Impossibly Royal Roast	true		Food	H-Food
+268680	Hearty Flora Frenzy	true		Food	H-Food
+242532	(name unknown in CRB table)			Food	R-Food
+260264	(name unknown in CRB table)			Food	R-Food
+260275	(name unknown in CRB table)			Food	R-Food
+260276	(name unknown in CRB table)			Food	R-Food
+260277	(name unknown in CRB table)			Food	R-Food
+260286	(name unknown in CRB table)			Food	R-Food
+260299	(name unknown in CRB table)			Food	R-Food
