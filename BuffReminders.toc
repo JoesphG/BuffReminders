@@ -2,7 +2,7 @@
 ## Title: BuffReminders
 ## Notes: Track missing buffs at a glance
 ## Author: zerbi
-## Version: @project-version@
+## Version: 3.9.0-JG.1
 ## SavedVariables: BuffRemindersDB
 ## X-Curse-Project-ID: 1441094
 ## X-Wago-ID: qGYZZjNg
@@ -29,11 +29,14 @@ Core.lua
 Data\Buffs.lua
 Data\ConsumableItems.lua
 Data\Pets.lua
+Extensions\JG\Bootstrap.lua
 State.lua
+Extensions\JG\PostRefresh.lua
 UI\Components.lua
 UI\Glow.lua
 Display\BuffReminders.lua
 Display\ImportExport.lua
 Display\Movers.lua
 Display\SecureButtons.lua
+Extensions\JG\ClickActions.lua
 Options\Options.lua
