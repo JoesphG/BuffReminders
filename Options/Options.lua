@@ -2316,6 +2316,9 @@ local function CreateOptionsPanel()
     })
     setLayout:Add(loginMsgHolder)
 
+    setLayout:Space(SECTION_GAP)
+    LayoutSectionHeader(setLayout, settingsContent, "Repair")
+
     local repairThresholdHolder = Components.Slider(settingsContent, {
         label = "Repair",
         min = 1,
