@@ -161,6 +161,30 @@ local function HideLastTargetTooltip()
     end
 end
 
+local function ShowSecureActionTooltip(anchor, itemID, spellID)
+    if not GameTooltip then
+        return
+    end
+    GameTooltip:SetOwner(anchor, "ANCHOR_CURSOR")
+    if itemID and itemID > 0 then
+        GameTooltip:SetItemByID(itemID)
+        GameTooltip:Show()
+        return
+    end
+    if spellID and spellID > 0 then
+        GameTooltip:SetSpellByID(spellID)
+        GameTooltip:Show()
+        return
+    end
+    GameTooltip:Hide()
+end
+
+local function HideSecureActionTooltip()
+    if GameTooltip then
+        GameTooltip:Hide()
+    end
+end
+
 -- ============================================================================
 -- CLICK-TO-CAST OVERLAY
 -- ============================================================================
@@ -210,22 +234,14 @@ local function CreateClickOverlay(frame)
     overlay.highlight:SetAllPoints()
     overlay.highlight:SetTexCoord(BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET, BR.TEXCOORD_INSET, 1 - BR.TEXCOORD_INSET)
     overlay.highlight:SetColorTexture(1, 1, 1, 0.2)
-    -- Tooltip: show last target name for targeted buffs
-    overlay:HookScript("OnEnter", function()
-        if frame.buffCategory ~= "targeted" or not frame.buffDef then
-            return
-        end
-        local name, class = BR.StateHelpers.GetLastTarget(frame.buffDef.key)
-        if not name then
-            return
-        end
-        ShowLastTargetTooltip(overlay, name, class)
+    overlay:SetScript("OnEnter", function(self)
+        ShowSecureActionTooltip(self, self.itemID, self._br_clickMacroSpellID)
     end)
-    overlay:HookScript("OnLeave", function()
-        HideLastTargetTooltip()
+    overlay:SetScript("OnLeave", function()
+        HideSecureActionTooltip()
     end)
     overlay:HookScript("OnHide", function()
-        HideLastTargetTooltip()
+        HideSecureActionTooltip()
     end)
     frame.clickOverlay = overlay
 end
@@ -580,6 +596,15 @@ local function CreateActionButton()
 
     btn.foodBorder = btn:CreateTexture(nil, "BACKGROUND")
     btn.foodBorder:Hide()
+    btn:SetScript("OnEnter", function(self)
+        ShowSecureActionTooltip(self, self.itemID, nil)
+    end)
+    btn:SetScript("OnLeave", function()
+        HideSecureActionTooltip()
+    end)
+    btn:HookScript("OnHide", function()
+        HideSecureActionTooltip()
+    end)
 
     return btn
 end
