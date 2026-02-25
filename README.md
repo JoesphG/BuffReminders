@@ -37,7 +37,6 @@ Implementation files in this fork:
 
 - `Extensions/JG/Bootstrap.lua`
 - `Extensions/JG/PostRefresh.lua`
-- `Extensions/JG/PetHover.lua`
 - `Extensions/JG/OptionsSection.lua`
 - `Options/Options.lua`
 
