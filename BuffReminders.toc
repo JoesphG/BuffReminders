@@ -2,12 +2,23 @@
 ## Title: BuffReminders
 ## Notes: Track missing buffs at a glance
 ## Author: zerbi
-## Version: 3.8.1-JG.1
+## Version: 3.9.0-JG.3
 ## SavedVariables: BuffRemindersDB
 ## X-Curse-Project-ID: 1441094
 ## X-Wago-ID: qGYZZjNg
 ## OptionalDeps: Masque, LibCustomGlow-1.0
 ## IconTexture: Interface\AddOns\BuffReminders\icon.tga
+## Category: Buffs & Debuffs
+## Category-deDE: Buffs & Debuffs
+## Category-esES: Beneficios y Perjuicios
+## Category-esMX: Beneficios y Perjuicios
+## Category-frFR: Améliorations et Affaiblissements
+## Category-itIT: Benefici e penalità
+## Category-koKR: 버프 및 디버프
+## Category-ptBR: Bônus e Penalidades
+## Category-ruRU: Баффы и дебаффы
+## Category-zhCN: 增益和减益
+## Category-zhTW: 增益與減益
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
@@ -27,6 +38,5 @@ Display\BuffReminders.lua
 Display\ImportExport.lua
 Display\Movers.lua
 Display\SecureButtons.lua
-Extensions\JG\PetHover.lua
-Extensions\JG\OptionsSection.lua
+Extensions\JG\ClickActions.lua
 Options\Options.lua

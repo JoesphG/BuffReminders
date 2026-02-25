@@ -1,6 +1,7 @@
 local _, BR = ...
 
 BR.JG = BR.JG or {}
+BR.JG.ITEM_ACTIONS = BR.JG.ITEM_ACTIONS or {}
 
 local function EnsureInjectedSelfBuff(def)
     local selfBuffs = BR.BUFF_TABLES and BR.BUFF_TABLES.self
@@ -23,14 +24,4 @@ EnsureInjectedSelfBuff({
     displayIcon = 136241,
     missingText = "REPAIR",
     infoTooltip = "JG|Shows when your equipped durability drops below threshold.",
-})
-
--- Eating timer anchor (state handled in PostRefresh).
-EnsureInjectedSelfBuff({
-    spellID = 0,
-    key = "jg_eating_timer",
-    name = "Eating Timer",
-    displayIcon = 133950,
-    missingText = "EATING",
-    infoTooltip = "JG|Shows an active countdown while eating.",
 })
