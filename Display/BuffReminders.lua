@@ -1482,6 +1482,44 @@ end
 -- Eating icon texture ID (from State.lua, matches the eating channel aura icon)
 local EATING_ICON = BR.EATING_AURA_ICON
 
+local function ClearFoodFrameStyle(frame)
+    if frame.foodTypeText then
+        frame.foodTypeText:Hide()
+    end
+    if frame.foodBorder then
+        frame.foodBorder:Hide()
+    end
+end
+
+local function ApplyFoodFrameStyle(frame, label, hearty)
+    if type(label) ~= "string" or label == "" then
+        ClearFoodFrameStyle(frame)
+        return
+    end
+
+    if not frame.foodTypeText then
+        frame.foodTypeText = frame:CreateFontString(nil, "OVERLAY")
+        frame.foodTypeText:SetPoint("TOP", frame, "TOP", 0, -1)
+    end
+    if not frame.foodBorder then
+        frame.foodBorder = frame:CreateTexture(nil, "BACKGROUND")
+    end
+
+    local size = frame:GetWidth()
+    local fontSize = math.max(7, math.floor(size * 0.24))
+    local borderColor = hearty and { r = 0.95, g = 0.70, b = 0.20, a = 1.0 } or { r = 0.65, g = 0.65, b = 0.65, a = 1.0 }
+    frame.foodTypeText:SetFont(fontPath, fontSize, "OUTLINE")
+    frame.foodTypeText:SetText((hearty and "H-" or "R-") .. label)
+    frame.foodTypeText:SetTextColor(1, 1, 1, 1)
+    frame.foodTypeText:Show()
+
+    frame.foodBorder:ClearAllPoints()
+    frame.foodBorder:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, 1)
+    frame.foodBorder:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 1, -1)
+    frame.foodBorder:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
+    frame.foodBorder:Show()
+end
+
 -- Resolve a consumable frame's icon from bag items.
 -- Returns "items" if bag items found (sets icon, quality overlay, stack count),
 -- "missing" if no items but showConsumablesWithoutItems is on,
@@ -1499,6 +1537,11 @@ local function ResolveConsumableFrame(frame)
         if frame.qualityOverlay then
             BR.SecureButtons.SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
         end
+        if frame.key == "food" then
+            ApplyFoodFrameStyle(frame, items[1].foodLabel, items[1].foodHearty == true)
+        else
+            ClearFoodFrameStyle(frame)
+        end
         frame.count:Hide()
         frame.stackCount:SetText(items[1].count)
         frame.stackCount:Show()
@@ -1513,6 +1556,7 @@ local function ResolveConsumableFrame(frame)
     if frame.qualityOverlay then
         frame.qualityOverlay:Hide()
     end
+    ClearFoodFrameStyle(frame)
     if (BuffRemindersDB.defaults or {}).showConsumablesWithoutItems then
         return "missing"
     end
@@ -1523,6 +1567,8 @@ end
 -- Returns true if the frame was shown, false if it was skipped (e.g. consumable
 -- with no bag items and showConsumablesWithoutItems off).
 local function RenderVisibleEntry(frame, entry)
+    ClearFoodFrameStyle(frame)
+
     -- Hide stack count and quality overlay by default; only the consumable-with-items path shows them
     frame.stackCount:Hide()
     if frame.qualityOverlay then
@@ -1653,6 +1699,11 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
                 extra:SetParent(parentFrame)
                 extra:SetSize(frame:GetWidth(), frame:GetHeight())
                 extra.icon:SetTexture(items[i].icon)
+                if frame.key == "food" then
+                    ApplyFoodFrameStyle(extra, items[i].foodLabel, items[i].foodHearty == true)
+                else
+                    ClearFoodFrameStyle(extra)
+                end
                 if extra.qualityOverlay then
                     BR.SecureButtons.SetQualityOverlay(extra.qualityOverlay, items[i].craftedQuality, frame:GetWidth())
                 end
