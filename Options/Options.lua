@@ -2316,6 +2316,26 @@ local function CreateOptionsPanel()
     })
     setLayout:Add(loginMsgHolder)
 
+    local repairThresholdHolder = Components.Slider(settingsContent, {
+        label = "Repair",
+        min = 1,
+        max = 100,
+        step = 1,
+        suffix = "%",
+        get = function()
+            return tonumber(BuffRemindersDB.repairDurabilityThreshold) or 30
+        end,
+        tooltip = {
+            title = "Repair reminder threshold",
+            desc = "Show the Repair self-reminder when your lowest equipped durability is at or below this value.",
+        },
+        onChange = function(val)
+            BuffRemindersDB.repairDurabilityThreshold = val
+            UpdateDisplay()
+        end,
+    })
+    setLayout:Add(repairThresholdHolder, nil, COMPONENT_GAP)
+
     -- ========== IMPORT/EXPORT TAB ==========
     -- Use simple frame (not scrollable) to avoid nested scroll frame issues with edit boxes
     local profilesContent = CreateFrame("Frame", nil, panel)

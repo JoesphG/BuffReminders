@@ -118,6 +118,39 @@ local function IsPetOnPassive()
     return nil
 end
 
+---Get lowest equipped durability percentage (excluding shirt/ranged slots).
+---@return number
+local function LowestEquippedDurabilityPercent()
+    local minPct = nil
+    for slot = 1, 19 do
+        if slot ~= 4 and slot ~= 18 then
+            local cur, max = GetInventoryItemDurability(slot)
+            if cur and max and max > 0 then
+                local pct = (cur / max) * 100
+                if not minPct or pct < minPct then
+                    minPct = pct
+                end
+            end
+        end
+    end
+    if not minPct then
+        return 100
+    end
+    return math.floor(minPct + 0.5)
+end
+
+---Custom check for repair reminder row.
+---@return boolean?
+local function ShouldShowRepairReminder()
+    if UnitIsDeadOrGhost("player") or InCombatLockdown() then
+        return nil
+    end
+    local threshold = tonumber(BuffRemindersDB and BuffRemindersDB.repairDurabilityThreshold) or 30
+    threshold = math.max(1, math.min(100, threshold))
+    local pct = LowestEquippedDurabilityPercent()
+    return pct <= threshold
+end
+
 ---Build a clickMacro function for targeted buffs that remembers the last target (last target re-casting).
 ---Macro priority: last target > mouseover > current target > no target (self-cast or error).
 ---@param buffKey string The buff's key, used to look up the last target
@@ -495,6 +528,14 @@ BR.BUFF_TABLES = {
             groupId = "shamanShields",
             displaySpells = 52127, -- Water Shield icon for group checkbox
             iconByRole = { HEALER = 52127, DAMAGER = 192106, TANK = 192106 },
+        },
+        -- Repair reminder (shows when equipped durability drops below threshold)
+        {
+            key = "jg_repair",
+            name = "Repair",
+            missingText = "REPAIR",
+            displayIcon = 136241,
+            customCheck = ShouldShowRepairReminder,
         },
     },
     ---@type SelfBuff[]

@@ -248,6 +248,7 @@ local defaults = {
     readyCheckDuration = 15, -- seconds
     optionsPanelScale = 1.2, -- base scale (displayed as 100%)
     showLoginMessages = true,
+    repairDurabilityThreshold = 30,
 
     -- Global defaults (inherited by categories unless overridden)
     ---@type DefaultSettings
