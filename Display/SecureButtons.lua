@@ -240,9 +240,6 @@ local function CreateClickOverlay(frame)
     overlay:SetScript("OnLeave", function()
         HideSecureActionTooltip()
     end)
-    overlay:HookScript("OnHide", function()
-        HideSecureActionTooltip()
-    end)
     frame.clickOverlay = overlay
 end
 
@@ -600,9 +597,6 @@ local function CreateActionButton()
         ShowSecureActionTooltip(self, self.itemID, nil)
     end)
     btn:SetScript("OnLeave", function()
-        HideSecureActionTooltip()
-    end)
-    btn:HookScript("OnHide", function()
         HideSecureActionTooltip()
     end)
 
