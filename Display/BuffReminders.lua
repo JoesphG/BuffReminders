@@ -704,6 +704,7 @@ end
 local UpdateDisplay, ToggleTestMode
 local UpdateFallbackDisplay, RenderPetEntries
 local ResetLayoutSignatures
+local ResetFoodConsumableDecor
 
 -- Local alias for glow module
 local SetExpirationGlow = BR.Glow.SetExpiration
@@ -752,6 +753,7 @@ local function ShowMissingFrame(frame, missingText, shouldGlow, category, cached
     if frame.qualityOverlay then
         frame.qualityOverlay:Hide()
     end
+    ResetFoodConsumableDecor(frame)
     if missingText then
         frame.count:SetFont(fontPath, GetFrameFontSize(frame, MISSING_TEXT_SCALE), "OUTLINE")
         frame.count:SetText(missingText)
@@ -1477,6 +1479,117 @@ end
 
 -- Eating icon texture ID (from State.lua, matches the eating channel aura icon)
 local EATING_ICON = BR.EATING_AURA_ICON
+local FOOD_BORDER_REGULAR = { 0.20, 0.75, 1.00, 1.00 }
+local FOOD_BORDER_HEARTY = { 1.00, 0.82, 0.00, 1.00 }
+local FOOD_ABBREV_STOPWORDS = {
+    ["and"] = true,
+    ["the"] = true,
+    ["of"] = true,
+    ["with"] = true,
+    ["in"] = true,
+    ["on"] = true,
+    ["a"] = true,
+    ["an"] = true,
+}
+
+---@param itemName string?
+---@return string?
+local function BuildFoodAbbreviation(itemName)
+    if type(itemName) ~= "string" or itemName == "" then
+        return nil
+    end
+
+    local letters = {}
+    for word in itemName:gmatch("[%a']+") do
+        local lower = word:lower()
+        if lower ~= "hearty" and not FOOD_ABBREV_STOPWORDS[lower] then
+            letters[#letters + 1] = word:sub(1, 1):upper()
+            if #letters >= 3 then
+                break
+            end
+        end
+    end
+
+    if #letters == 0 then
+        return nil
+    end
+    return table.concat(letters)
+end
+
+---@param itemName string?
+---@return boolean
+local function IsHeartyFoodName(itemName)
+    if type(itemName) ~= "string" or itemName == "" then
+        return false
+    end
+    return itemName:lower():find("hearty", 1, true) ~= nil
+end
+
+---@param frame BuffFrame
+ResetFoodConsumableDecor = function(frame)
+    if frame.foodTypeText then
+        frame.foodTypeText:Hide()
+    end
+    if frame.border then
+        frame.border:SetColorTexture(0, 0, 0, 1)
+    end
+end
+
+---@param frame BuffFrame
+local function EnsureFoodConsumableDecor(frame)
+    if frame.foodTypeText then
+        return
+    end
+    frame.foodTypeText = frame:CreateFontString(nil, "OVERLAY")
+    frame.foodTypeText:SetPoint("TOP", frame, "TOP", 0, -2)
+    frame.foodTypeText:Hide()
+end
+
+---@param frame BuffFrame
+---@param item table?
+local function ApplyFoodConsumableDecor(frame, item)
+    if frame.key ~= "food" then
+        ResetFoodConsumableDecor(frame)
+        return
+    end
+    if type(item) ~= "table" then
+        ResetFoodConsumableDecor(frame)
+        return
+    end
+
+    if type(item.foodAbbrev) ~= "string" or item.foodAbbrev == "" then
+        local itemName = nil
+        if item.itemID and C_Item and C_Item.GetItemNameByID then
+            itemName = C_Item.GetItemNameByID(item.itemID)
+        end
+        if not itemName and item.itemID then
+            itemName = GetItemInfo(item.itemID)
+        end
+        if itemName then
+            item.foodAbbrev = BuildFoodAbbreviation(itemName)
+            item.foodHearty = IsHeartyFoodName(itemName)
+        end
+    end
+    if type(item.foodAbbrev) ~= "string" or item.foodAbbrev == "" then
+        ResetFoodConsumableDecor(frame)
+        return
+    end
+
+    EnsureFoodConsumableDecor(frame)
+
+    local isHearty = item.foodHearty == true
+    local label = (isHearty and "H-" or "R-") .. item.foodAbbrev
+    local fontSize = math.max(8, math.floor(frame:GetWidth() * 0.22))
+    frame.foodTypeText:SetFont(fontPath, fontSize, "OUTLINE")
+    frame.foodTypeText:SetText(label)
+    frame.foodTypeText:SetTextColor(1, 1, 1, 1)
+    frame.foodTypeText:Show()
+
+    if frame.border then
+        local c = isHearty and FOOD_BORDER_HEARTY or FOOD_BORDER_REGULAR
+        frame.border:SetColorTexture(c[1], c[2], c[3], c[4])
+    end
+end
 
 -- Resolve a consumable frame's icon from bag items.
 -- Returns "items" if bag items found (sets icon, quality overlay, stack count),
@@ -1492,6 +1605,7 @@ local function ResolveConsumableFrame(frame)
     end
     if items and items[1] then
         frame.icon:SetTexture(items[1].icon)
+        ApplyFoodConsumableDecor(frame, items[1])
         if frame.qualityOverlay then
             BR.SecureButtons.SetQualityOverlay(frame.qualityOverlay, items[1].craftedQuality, frame:GetWidth())
         end
@@ -1506,6 +1620,7 @@ local function ResolveConsumableFrame(frame)
     if fallback then
         frame.icon:SetTexture(fallback)
     end
+    ResetFoodConsumableDecor(frame)
     if frame.qualityOverlay then
         frame.qualityOverlay:Hide()
     end
@@ -1521,6 +1636,7 @@ end
 local function RenderVisibleEntry(frame, entry)
     -- Hide stack count and quality overlay by default; only the consumable-with-items path shows them
     frame.stackCount:Hide()
+    ResetFoodConsumableDecor(frame)
     if frame.qualityOverlay then
         frame.qualityOverlay:Hide()
     end
@@ -1663,6 +1779,7 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
                 extra:SetParent(parentFrame)
                 extra:SetSize(frame:GetWidth(), frame:GetHeight())
                 extra.icon:SetTexture(items[i].icon)
+                ApplyFoodConsumableDecor(extra, items[i])
                 if extra.qualityOverlay then
                     BR.SecureButtons.SetQualityOverlay(extra.qualityOverlay, items[i].craftedQuality, frame:GetWidth())
                 end

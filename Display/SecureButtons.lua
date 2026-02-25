@@ -287,6 +287,18 @@ end
 local ACTION_ICON_SCALE = 0.45
 local ACTION_ICON_MIN = 18
 local ACTION_ICON_OFFSET = -6
+local FOOD_REGULAR_BORDER = { r = 0.20, g = 0.75, b = 1.00, a = 1.00 }
+local FOOD_HEARTY_BORDER = { r = 1.00, g = 0.82, b = 0.00, a = 1.00 }
+local FOOD_ABBREV_STOPWORDS = {
+    ["and"] = true,
+    ["the"] = true,
+    ["of"] = true,
+    ["with"] = true,
+    ["in"] = true,
+    ["on"] = true,
+    ["a"] = true,
+    ["an"] = true,
+}
 
 -- Quality text and colors for crafted consumables (rank 1/2/3)
 local QUALITY_INFO = {
@@ -315,6 +327,70 @@ local function SetQualityOverlay(overlay, craftedQuality, size)
     else
         overlay:Hide()
     end
+end
+
+---Build a short label for food items from the item name.
+---@param itemName string?
+---@return string?
+local function BuildFoodAbbreviation(itemName)
+    if type(itemName) ~= "string" or itemName == "" then
+        return nil
+    end
+
+    local letters = {}
+    for word in itemName:gmatch("[%a']+") do
+        local lower = word:lower()
+        if lower ~= "hearty" and not FOOD_ABBREV_STOPWORDS[lower] then
+            letters[#letters + 1] = word:sub(1, 1):upper()
+            if #letters >= 3 then
+                break
+            end
+        end
+    end
+
+    if #letters == 0 then
+        return nil
+    end
+    return table.concat(letters)
+end
+
+---@param itemName string?
+---@return boolean
+local function IsHeartyFoodName(itemName)
+    if type(itemName) ~= "string" or itemName == "" then
+        return false
+    end
+    return itemName:lower():find("hearty", 1, true) ~= nil
+end
+
+---@param btn table
+---@param size number
+local function ApplyFoodActionStyle(btn, size)
+    local abbrev = btn._br_food_abbrev
+    if type(abbrev) ~= "string" or abbrev == "" then
+        if btn.foodTypeText then
+            btn.foodTypeText:Hide()
+        end
+        if btn.foodBorder then
+            btn.foodBorder:Hide()
+        end
+        return
+    end
+
+    local hearty = btn._br_food_hearty == true
+    local fontPath = BR.Display.GetFontPath()
+    local fontSize = math.max(7, math.floor(size * 0.28))
+    btn.foodTypeText:SetFont(fontPath, fontSize, "OUTLINE")
+    btn.foodTypeText:SetText((hearty and "H-" or "R-") .. abbrev)
+    btn.foodTypeText:SetTextColor(1, 1, 1, 1)
+    btn.foodTypeText:Show()
+
+    local color = hearty and FOOD_HEARTY_BORDER or FOOD_REGULAR_BORDER
+    btn.foodBorder:ClearAllPoints()
+    btn.foodBorder:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
+    btn.foodBorder:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+    btn.foodBorder:SetColorTexture(color.r, color.g, color.b, color.a)
+    btn.foodBorder:Show()
 end
 
 ---Create a small SecureActionButton for the consumable item row.
@@ -359,6 +435,13 @@ local function CreateActionButton()
     btn.qualityOverlay = btn:CreateFontString(nil, "OVERLAY")
     btn.qualityOverlay:Hide()
 
+    btn.foodTypeText = btn:CreateFontString(nil, "OVERLAY")
+    btn.foodTypeText:SetPoint("TOP", btn, "TOP", 0, -1)
+    btn.foodTypeText:Hide()
+
+    btn.foodBorder = btn:CreateTexture(nil, "BACKGROUND")
+    btn.foodBorder:Hide()
+
     return btn
 end
 
@@ -402,6 +485,13 @@ local function RefreshConsumableCache()
                             local info = C_Container.GetContainerItemInfo(bag, slot)
                             local icon = info and info.iconFileID or nil
                             local itemLink = info and info.hyperlink
+                            local itemName = info and info.itemName
+                            if not itemName and C_Item and C_Item.GetItemNameByID then
+                                itemName = C_Item.GetItemNameByID(itemID)
+                            end
+                            if not itemName then
+                                itemName = GetItemInfo(itemID)
+                            end
                             local cq = nil
                             if itemLink then
                                 -- Parse crafted quality tier from the embedded atlas in the item link
@@ -411,11 +501,19 @@ local function RefreshConsumableCache()
                                     cq = tonumber(tier)
                                 end
                             end
+                            local foodAbbrev = nil
+                            local foodHearty = false
+                            if category == "food" then
+                                foodAbbrev = BuildFoodAbbreviation(itemName)
+                                foodHearty = IsHeartyFoodName(itemName)
+                            end
                             buckets[category][itemID] = {
                                 itemID = itemID,
                                 count = count,
                                 icon = icon,
                                 craftedQuality = cq,
+                                foodAbbrev = foodAbbrev,
+                                foodHearty = foodHearty,
                             }
                         end
                     end
@@ -510,6 +608,8 @@ local function UpdateConsumableButtons(frame, actionItems, clickable, startIndex
         btn.itemID = item.itemID
         btn.icon:SetTexture(item.icon or 134400)
         btn._br_craftedQuality = item.craftedQuality
+        btn._br_food_abbrev = item.foodAbbrev
+        btn._br_food_hearty = item.foodHearty == true
 
         -- Dirty tracking: skip redundant SetAttribute calls
         if btn._br_action_item ~= item.itemID then
@@ -717,6 +817,7 @@ local function SyncSecureButtons()
                                     )
                                     btn.count:SetFont(fontPath, math.max(10, math.floor(size * 0.45)), "OUTLINE")
                                     SetQualityOverlay(btn.qualityOverlay, btn._br_craftedQuality, size)
+                                    ApplyFoodActionStyle(btn, size)
                                     btn._br_needs_sync = false
                                 end
                                 -- Activate combat state driver on first show (buttons start with "hide" driver)
