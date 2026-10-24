@@ -73,8 +73,9 @@ BR.EXTERNALS = {
     {
         key = "bloodlust", -- Shaman + the cross-class variants
         section = "boosts",
-        -- The Added trigger repeats while lust runs; one sound per 40s lust.
-        soundThrottle = 40,
+        -- The Added trigger repeats while lust runs. AddAuraSound refuses a
+        -- throttleSeconds above 5, so 5 is the most the client allows.
+        soundThrottle = 5,
         labelSpellIDs = { 2825, 32182 },
         spellIDs = {
             2825, -- Bloodlust
