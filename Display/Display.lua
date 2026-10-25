@@ -2163,7 +2163,10 @@ local function ApplyConsumableDisplayMode(frame, entry, frameList, parentFrame)
         BR.SecureButtons.UpdateConsumableButtons(frame, nil)
         if displayMode == "expanded" and items and #items > 1 then
             local cachedGlow = entry.category
-                    and GetCachedGlowSettings(entry.category, entry.glowKindOverride or "missing")
+                    and GetCachedGlowSettings(
+                        entry.category,
+                        entry.glowKindOverride or (expiring and "expiring" or "missing")
+                    )
                 or nil
             local expandedSize = frame:GetWidth()
             local stackFontSize = BR.SecureButtons.ComputeConsumableFontSize(expandedSize, "stackCount")
